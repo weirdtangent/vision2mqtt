@@ -141,14 +141,96 @@ COCO classes are simplified to categories useful for home security:
 | animal | cat, dog, horse, cow, sheep, bear, elephant, zebra, giraffe |
 | bird | bird |
 
-## AX8850 NPU Setup
+## Raspberry Pi 5 + M5Stack LLM-8850 Setup
 
-For the `axcl` backend on a Raspberry Pi 5 with M5Stack LLM-8850:
+The `axcl` backend is specifically tested on a **Raspberry Pi 5** with the **[M5Stack LLM-8850 Pi HAT](https://docs.m5stack.com/en/ai_hardware/LLM-8850_Card)** kit (AXera AX8850 NPU, 24 TOPS @ INT8, 8GB LPDDR4x).
 
-1. Install the [AXCL driver](https://github.com/AXERA-TECH/axcl-pi5-examples) for Raspberry Pi OS
-2. Install [pyAXCL](https://github.com/AXERA-TECH/pyaxcl): `pip install pyaxcl`
-3. Download the YOLO11 model: `wget https://huggingface.co/AXERA-TECH/YOLO11/resolve/main/ax650/yolo11s.axmodel -P ./models/`
-4. Set `backend: axcl` and `model: /models/yolo11s.axmodel` in config.yaml
+### Quick start (fresh Raspberry Pi OS 64-bit Lite)
+
+```bash
+# 1. Install build deps
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y gcc make patch dkms linux-headers-$(uname -r)
+
+# 2. Enable PCIe Gen 3 — add to /boot/firmware/config.txt under [all]:
+#    dtparam=pciex1_gen=3
+
+# 3. Install AXCL driver from M5Stack APT repo
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo wget -qO /etc/apt/keyrings/StackFlow.gpg https://repo.llm.m5stack.com/m5stack-apt-repo/key/StackFlow.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/StackFlow.gpg] https://repo.llm.m5stack.com/m5stack-apt-repo axclhost main' \
+  | sudo tee /etc/apt/sources.list.d/axclhost.list
+sudo apt update && sudo apt install -y axclhost
+
+# 4. Install Docker
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo usermod -aG docker $USER
+
+# 5. COLD BOOT (power-cycle required — soft reboot won't reset the AX8850 PCIe link)
+sudo shutdown -h now
+# Unplug and replug power
+
+# 6. Verify
+axcl-smi          # should show AX650N with temp and memory
+docker --version   # should show Docker CE
+```
+
+### Deploy vision2mqtt
+
+```bash
+mkdir -p ~/vision2mqtt/config ~/vision2mqtt/models
+
+# Download YOLO11s model
+wget https://huggingface.co/AXERA-TECH/YOLO11/resolve/main/ax650/yolo11s.axmodel \
+  -P ~/vision2mqtt/models/
+```
+
+Create `config/config.yaml` with `backend: axcl` and `model: /models/yolo11s.axmodel` (see [config.yaml.sample](config.yaml.sample)).
+
+For the Pi 5 with LLM-8850, the `docker-compose.yaml` needs NPU device passthrough:
+```yaml
+services:
+  vision2mqtt:
+    image: graystorm/vision2mqtt:latest
+    container_name: vision2mqtt
+    restart: unless-stopped
+    network_mode: host
+    devices:
+      - /dev/axcl_host:/dev/axcl_host
+      - /dev/ax_mmb_dev:/dev/ax_mmb_dev
+    volumes:
+      - ./config:/config
+      - ./models:/models
+      - /usr/lib/axcl:/usr/lib/axcl:ro
+    environment:
+      - TZ=America/New_York
+      - LD_LIBRARY_PATH=/usr/lib/axcl
+```
+
+Start:
+```bash
+cd ~/vision2mqtt && docker compose up -d
+```
+
+The container auto-starts on boot via `restart: unless-stopped`.
+
+### Updating to a new image
+
+```bash
+cd ~/vision2mqtt
+docker compose pull        # pull latest image
+docker compose up -d       # recreate container with new image
+docker image prune -f      # clean up old images
+```
+
+### Resources
+
+- [M5Stack LLM-8850 software setup guide](https://docs.m5stack.com/en/guide/ai_accelerator/llm-8850/m5_llm_8850_software_install)
+- [AXCL Pi 5 examples](https://github.com/AXERA-TECH/axcl-pi5-examples)
+- [AXERA-TECH models on Hugging Face](https://huggingface.co/AXERA-TECH)
 
 ## Running the app
 

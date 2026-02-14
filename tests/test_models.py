@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
+from vision2mqtt.models.events import DetectedObject, VisionResult
 
 
 class TestMotionEvent:

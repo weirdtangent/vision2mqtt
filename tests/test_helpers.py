@@ -2,7 +2,6 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import os
 import pytest
-import tempfile
 from unittest.mock import MagicMock
 
 from vision2mqtt.mixins.helpers import ConfigError, HelpersMixin
@@ -110,8 +109,10 @@ class TestLoadConfigDefaults:
         assert config["vision"]["min_confidence"] == 0.45
         assert config["vision"]["concurrency"] == 1
         assert config["vision"]["max_queue"] == 20
-        assert config["vision"]["retain_presence"] is False
+        assert config["vision"]["retain_presence"] is True  # forced by home_assistant=True default
         assert config["vision"]["debug_save_images"] is False
+        assert config["home_assistant"] is True
+        assert config["mqtt"]["discovery_prefix"] == "homeassistant"
         assert config["config_from"] == "env"
 
     def test_env_var_overrides(self, tmp_path, monkeypatch):
@@ -243,6 +244,106 @@ class TestReadFile:
         helpers = FakeHelpers()
         with pytest.raises(FileNotFoundError):
             helpers.read_file("/nonexistent/file.txt")
+
+
+class TestHomeAssistantConfig:
+    def test_ha_defaults_to_true(self, tmp_path):
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("v0.1.0")
+
+        helpers = FakeHelpers()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            config = helpers.load_config(str(tmp_path))
+        finally:
+            os.chdir(old_cwd)
+
+        assert config["home_assistant"] is True
+
+    def test_ha_forces_retain_presence(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("""
+mqtt:
+  host: localhost
+vision:
+  backend: ultralytics
+  retain_presence: false
+""")
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("v0.1.0")
+
+        helpers = FakeHelpers()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            config = helpers.load_config(str(tmp_path))
+        finally:
+            os.chdir(old_cwd)
+
+        assert config["home_assistant"] is True
+        assert config["vision"]["retain_presence"] is True
+
+    def test_ha_disabled_preserves_retain_presence(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("""
+home_assistant: false
+mqtt:
+  host: localhost
+vision:
+  backend: ultralytics
+  retain_presence: false
+""")
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("v0.1.0")
+
+        helpers = FakeHelpers()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            config = helpers.load_config(str(tmp_path))
+        finally:
+            os.chdir(old_cwd)
+
+        assert config["home_assistant"] is False
+        assert config["vision"]["retain_presence"] is False
+
+    def test_discovery_prefix_configurable(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("""
+mqtt:
+  host: localhost
+  discovery_prefix: custom_prefix
+vision:
+  backend: ultralytics
+""")
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("v0.1.0")
+
+        helpers = FakeHelpers()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            config = helpers.load_config(str(tmp_path))
+        finally:
+            os.chdir(old_cwd)
+
+        assert config["mqtt"]["discovery_prefix"] == "custom_prefix"
+
+    def test_ha_env_var_override(self, tmp_path, monkeypatch):
+        version_file = tmp_path / "VERSION"
+        version_file.write_text("v0.1.0")
+        monkeypatch.setenv("HOME_ASSISTANT", "false")
+
+        helpers = FakeHelpers()
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            config = helpers.load_config(str(tmp_path))
+        finally:
+            os.chdir(old_cwd)
+
+        assert config["home_assistant"] is False
 
 
 class TestHandleSignal:

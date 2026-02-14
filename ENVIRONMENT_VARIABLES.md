@@ -11,6 +11,7 @@ While using a config.yaml file is the recommended approach, vision2mqtt also sup
 - `MQTT_QOS` (optional, default = 0) - Quality of Service (0-2)
 - `MQTT_PROTOCOL` (optional, default = '5') - MQTT protocol version: '3.1.1' or '5'
 - `MQTT_PREFIX` (optional, default = 'vision2mqtt') - MQTT topic prefix
+- `MQTT_DISCOVERY_PREFIX` (optional, default = 'homeassistant') - MQTT discovery prefix for Home Assistant
 
 ## MQTT TLS Settings
 
@@ -28,6 +29,10 @@ While using a config.yaml file is the recommended approach, vision2mqtt also sup
 - `VISION_MAX_QUEUE` (optional, default = 20) - maximum queued vision requests (oldest dropped when full)
 - `VISION_RETAIN_PRESENCE` (optional, default = false) - publish retained ON/OFF presence per camera per label
 - `VISION_DEBUG_SAVE` (optional, default = false) - save annotated images to /tmp for debugging
+
+## Home Assistant Settings
+
+- `HOME_ASSISTANT` (optional, default = true) - enable Home Assistant MQTT discovery
 
 ## Other Settings
 

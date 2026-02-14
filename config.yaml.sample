@@ -1,6 +1,8 @@
 # Example configuration for vision2mqtt
 # Copy this file to config.yaml and adjust values as needed.
 
+home_assistant: true               # enable Home Assistant MQTT discovery (forces retain_presence on)
+
 mqtt:
   host: 10.10.10.1               # MQTT broker hostname or IP (Synology w/ Mosquitto)
   port: 1883                     # MQTT port (usually 1883 or 8883 for TLS)
@@ -13,6 +15,7 @@ mqtt:
   tls_ca_cert: /config/ca.crt    # Path to CA certificate (if TLS enabled)
   tls_cert: /config/client.crt   # Path to client certificate (if TLS enabled)
   tls_key: /config/client.key    # Path to client private key (if TLS enabled)
+  discovery_prefix: homeassistant  # MQTT discovery prefix for Home Assistant
 
 vision:
   backend: ultralytics           # "axcl" for AX8850 NPU, "ultralytics" for CPU fallback

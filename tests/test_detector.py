@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.detector import DetectorMixin
 from vision2mqtt.mixins.labels import LabelsMixin
-from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
+from vision2mqtt.models.events import DetectedObject, MotionEvent
 
 
 class FakeDetector(DetectorMixin, LabelsMixin):
