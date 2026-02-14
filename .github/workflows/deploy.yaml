@@ -51,7 +51,7 @@ jobs:
 
       - name: Mypy
         run: |
-          uv run mypy .
+          uv run mypy src/
 
   test:
     name: Test
