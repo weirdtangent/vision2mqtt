@@ -156,13 +156,13 @@ sudo apt install -y gcc make patch dkms linux-headers-$(uname -r)
 #    dtparam=pciex1_gen=3
 
 # 3. Install AXCL driver from M5Stack APT repo
+sudo install -m 0755 -d /etc/apt/keyrings
 sudo wget -qO /etc/apt/keyrings/StackFlow.gpg https://repo.llm.m5stack.com/m5stack-apt-repo/key/StackFlow.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/StackFlow.gpg] https://repo.llm.m5stack.com/m5stack-apt-repo axclhost main' \
   | sudo tee /etc/apt/sources.list.d/axclhost.list
 sudo apt update && sudo apt install -y axclhost
 
 # 4. Install Docker
-sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
   | sudo tee /etc/apt/sources.list.d/docker.list
