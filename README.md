@@ -178,13 +178,53 @@ axcl-smi          # should show AX650N with temp and memory
 docker --version   # should show Docker CE
 ```
 
-### Download model and configure
+### Deploy vision2mqtt
 
 ```bash
-wget https://huggingface.co/AXERA-TECH/YOLO11/resolve/main/ax650/yolo11s.axmodel -P ./models/
+mkdir -p ~/vision2mqtt/config ~/vision2mqtt/models
+
+# Download YOLO11s model
+wget https://huggingface.co/AXERA-TECH/YOLO11/resolve/main/ax650/yolo11s.axmodel \
+  -P ~/vision2mqtt/models/
 ```
 
-Set `backend: axcl` and `model: /models/yolo11s.axmodel` in config.yaml.
+Create `config/config.yaml` with `backend: axcl` and `model: /models/yolo11s.axmodel` (see [config.yaml.sample](config.yaml.sample)).
+
+For the Pi 5 with LLM-8850, the `docker-compose.yaml` needs NPU device passthrough:
+```yaml
+services:
+  vision2mqtt:
+    image: graystorm/vision2mqtt:latest
+    container_name: vision2mqtt
+    restart: unless-stopped
+    network_mode: host
+    devices:
+      - /dev/axcl_host:/dev/axcl_host
+      - /dev/ax_mmb_dev:/dev/ax_mmb_dev
+    volumes:
+      - ./config:/config
+      - ./models:/models
+      - /usr/lib/axcl:/usr/lib/axcl:ro
+    environment:
+      - TZ=America/New_York
+      - LD_LIBRARY_PATH=/usr/lib/axcl
+```
+
+Start:
+```bash
+cd ~/vision2mqtt && docker compose up -d
+```
+
+The container auto-starts on boot via `restart: unless-stopped`.
+
+### Updating to a new image
+
+```bash
+cd ~/vision2mqtt
+docker compose pull        # pull latest image
+docker compose up -d       # recreate container with new image
+docker image prune -f      # clean up old images
+```
 
 ### Resources
 
