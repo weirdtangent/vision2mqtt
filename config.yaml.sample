@@ -1,7 +1,7 @@
 # Example configuration for vision2mqtt
 # Copy this file to config.yaml and adjust values as needed.
 
-home_assistant: true               # enable Home Assistant MQTT discovery (true/false)
+home_assistant: true               # enable Home Assistant MQTT discovery (forces retain_presence on)
 
 mqtt:
   host: 10.10.10.1               # MQTT broker hostname or IP (Synology w/ Mosquitto)
