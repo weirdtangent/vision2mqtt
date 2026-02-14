@@ -14,16 +14,141 @@ if TYPE_CHECKING:
 
 class PublishMixin:
     async def publish_service_discovery(self: Vision2Mqtt) -> None:
-        pass
+        if not self.ha_enabled:
+            return
 
-    async def publish_service_availability(self: Vision2Mqtt) -> None:
-        pass
+        device_id = "service"
+        device = {
+            "stat_t": self.mqtt_helper.stat_t(device_id, "service"),
+            "avty_t": self.mqtt_helper.avty_t(device_id),
+            "device": {
+                "name": self.service_name,
+                "identifiers": [self.mqtt_helper.service_slug],
+                "manufacturer": "weirdTangent",
+                "sw_version": self.config["version"],
+            },
+            "origin": {
+                "name": self.service_name,
+                "sw_version": self.config["version"],
+                "support_url": "https://github.com/weirdTangent/vision2mqtt",
+            },
+            "qos": self.qos,
+            "cmps": {
+                "server": {
+                    "p": "binary_sensor",
+                    "name": self.service_name,
+                    "uniq_id": self.mqtt_helper.svc_unique_id("server"),
+                    "stat_t": self.mqtt_helper.stat_t(device_id, "service", "server"),
+                    "payload_on": "online",
+                    "payload_off": "offline",
+                    "device_class": "connectivity",
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:eye",
+                },
+            },
+        }
+
+        topic = self.mqtt_helper.disc_t("device", device_id)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
+        self.logger.debug(f"published HA service discovery to {topic}")
+
+    async def publish_service_availability(self: Vision2Mqtt, status: str = "online") -> None:
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, self.mqtt_helper.avty_t("service"), status)
 
     async def publish_service_state(self: Vision2Mqtt) -> None:
-        pass
+        await asyncio.to_thread(
+            self.mqtt_helper.safe_publish,
+            self.mqtt_helper.stat_t("service", "service", "server"),
+            "online",
+        )
+
+    async def publish_camera_discovery(self: Vision2Mqtt, camera_id: str, camera_name: str) -> None:
+        if not self.ha_enabled:
+            return
+
+        prefix = self.service
+        labels = self.vision_config["labels"]
+
+        # binary sensors for each configured label
+        cmps: dict[str, dict] = {}
+        for label in labels:
+            cmps[f"presence_{label}"] = {
+                "p": "binary_sensor",
+                "name": f"{label.title()} detected",
+                "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, f"presence_{label}"),
+                "stat_t": f"{prefix}/{camera_id}/presence/{label}",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "device_class": "occupancy" if label == "person" else "motion",
+                "icon": "mdi:account" if label == "person" else "mdi:motion-sensor",
+            }
+
+        # sensor: object count
+        cmps["object_count"] = {
+            "p": "sensor",
+            "name": "Object count",
+            "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, "object_count"),
+            "stat_t": f"{prefix}/{camera_id}/sensor/object_count",
+            "icon": "mdi:counter",
+        }
+
+        # sensor: last detection timestamp
+        cmps["last_detection"] = {
+            "p": "sensor",
+            "name": "Last detection",
+            "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, "last_detection"),
+            "stat_t": f"{prefix}/{camera_id}/sensor/last_detection",
+            "device_class": "timestamp",
+            "icon": "mdi:clock-outline",
+        }
+
+        # sensor: processing time
+        cmps["processing_time"] = {
+            "p": "sensor",
+            "name": "Processing time",
+            "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, "processing_time"),
+            "stat_t": f"{prefix}/{camera_id}/sensor/processing_time",
+            "unit_of_measurement": "ms",
+            "icon": "mdi:timer-outline",
+        }
+
+        device = {
+            "stat_t": self.mqtt_helper.stat_t(camera_id, "state"),
+            "avty_t": self.mqtt_helper.avty_t("service"),
+            "device": {
+                "name": camera_name,
+                "identifiers": [self.mqtt_helper.device_slug(camera_id)],
+                "via_device": self.mqtt_helper.service_slug,
+            },
+            "origin": {
+                "name": self.service_name,
+                "sw_version": self.config["version"],
+                "support_url": "https://github.com/weirdTangent/vision2mqtt",
+            },
+            "qos": self.qos,
+            "cmps": cmps,
+        }
+
+        topic = self.mqtt_helper.disc_t("device", camera_id)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
+        self.logger.info(f"published HA camera discovery for '{camera_name}' ({camera_id})")
+
+    async def publish_camera_state(self: Vision2Mqtt, camera_id: str, object_count: int, processing_time_ms: float, timestamp: str) -> None:
+        if not self.ha_enabled:
+            return
+
+        prefix = self.service
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/object_count", str(object_count))
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/last_detection", timestamp)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/processing_time", str(round(processing_time_ms, 1)))
 
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
         prefix = self.service
+
+        # lazy camera discovery on first detection
+        if self.ha_enabled and event.camera_id not in self.seen_cameras:
+            self.seen_cameras.add(event.camera_id)
+            await self.publish_camera_discovery(event.camera_id, event.camera_name)
 
         # publish objects list
         objects_topic = f"{prefix}/{event.camera_id}/{event.event_id}/objects"
@@ -63,5 +188,8 @@ class PublishMixin:
                 presence_topic = f"{prefix}/{event.camera_id}/presence/{label}"
                 state = "ON" if label in active_labels else "OFF"
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
+
+        # publish camera sensor state for HA
+        await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms, event.timestamp)
 
         self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): " f"{len(result.objects)} objects, {result.processing_time_ms}ms")

@@ -50,6 +50,9 @@ class Base:
         self.mqttc: Client
         self.client_id = self.mqtt_helper.client_id()
 
+        self.ha_enabled: bool = self.config.get("home_assistant", True)
+        self.seen_cameras: set[str] = set()
+
         max_queue = self.vision_config.get("max_queue", 20)
         self.queue: asyncio.Queue[MotionEvent] = asyncio.Queue(maxsize=max_queue)
 
@@ -72,6 +75,11 @@ class Base:
         self.running = False
 
         if cast(Any, self).mqttc is not None:
+            try:
+                await cast(Any, self).publish_service_availability("offline")
+            except Exception as err:
+                self.logger.debug(f"publish offline failed: {err!r}")
+
             try:
                 cast(Any, self).mqttc.loop_stop()
             except Exception as err:

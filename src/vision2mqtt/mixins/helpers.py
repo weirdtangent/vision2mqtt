@@ -101,6 +101,7 @@ class HelpersMixin:
             "tls_cert":         str(mqtt.get("tls_cert")         or os.getenv("MQTT_TLS_CERT", "")),
             "tls_key":          str(mqtt.get("tls_key")          or os.getenv("MQTT_TLS_KEY", "")),
             "prefix":           str(mqtt.get("prefix")           or os.getenv("MQTT_PREFIX", "vision2mqtt")),
+            "discovery_prefix": str(mqtt.get("discovery_prefix") or os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant")),
         }
 
         vision = {
@@ -115,15 +116,23 @@ class HelpersMixin:
             "debug_save_images": bool(vision.get("debug_save_images", os.getenv("VISION_DEBUG_SAVE", "").lower() == "true")),
         }
 
+        ha_raw = config.get("home_assistant")
+        home_assistant = str(ha_raw if ha_raw is not None else os.getenv("HOME_ASSISTANT", "true")).lower() == "true"
+
         config = {
-            "mqtt":        mqtt,
-            "vision":      vision,
-            "debug":       bool(config.get("debug", os.getenv("DEBUG", "").lower() == "true")),
-            "config_from": config_from,
-            "config_path": config_path,
-            "version":     version,
+            "mqtt":           mqtt,
+            "vision":         vision,
+            "home_assistant": home_assistant,
+            "debug":          bool(config.get("debug", os.getenv("DEBUG", "").lower() == "true")),
+            "config_from":    config_from,
+            "config_path":    config_path,
+            "version":        version,
         }
         # fmt: on
+
+        # HA discovery requires retained presence topics
+        if home_assistant and not vision["retain_presence"]:
+            vision["retain_presence"] = True
 
         # Validate
         if vision["backend"] not in ("ultralytics", "axcl"):

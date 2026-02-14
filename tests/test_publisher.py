@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-import asyncio
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -10,12 +9,24 @@ from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
 
 
 class FakePublisher(PublishMixin):
-    def __init__(self, vision_config):
+    def __init__(self, vision_config, ha_enabled=False):
         self.vision_config = vision_config
         self.service = "vision2mqtt"
+        self.service_name = "vision2mqtt service"
+        self.qos = 0
+        self.ha_enabled = ha_enabled
+        self.seen_cameras: set[str] = set()
+        self.config = {"version": "v0.1.0-test"}
         self.logger = MagicMock()
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.safe_publish = MagicMock()
+        self.mqtt_helper.service_slug = "vision2mqtt"
+        self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
+        self.mqtt_helper.dev_unique_id = MagicMock(side_effect=lambda d, e: f"vision2mqtt_{d}_{e}")
+        self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
+        self.mqtt_helper.disc_t = MagicMock(side_effect=lambda c, i: f"homeassistant/{c}/vision2mqtt_{i}/config")
+        self.mqtt_helper.stat_t = MagicMock(side_effect=lambda *args: "/".join(["vision2mqtt"] + [str(a) for a in args if a != "service"]))
+        self.mqtt_helper.avty_t = MagicMock(return_value="vision2mqtt/availability")
 
 
 async def _fake_to_thread(fn, *args):
@@ -100,3 +111,137 @@ class TestPublishVisionResult:
                 assert c.args[1] == "ON"
             elif "presence" in c.args[0]:
                 assert c.args[1] == "OFF"
+
+
+class TestServiceDiscovery:
+    @pytest.mark.asyncio
+    async def test_publishes_when_ha_enabled(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_service_discovery()
+
+        pub.mqtt_helper.disc_t.assert_called_once_with("device", "service")
+        pub.mqtt_helper.safe_publish.assert_called_once()
+        topic = pub.mqtt_helper.safe_publish.call_args.args[0]
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        assert topic == "homeassistant/device/vision2mqtt_service/config"
+        assert payload["device"]["name"] == "vision2mqtt service"
+        assert "cmps" in payload
+        assert "server" in payload["cmps"]
+        assert payload["cmps"]["server"]["p"] == "binary_sensor"
+        assert payload["cmps"]["server"]["device_class"] == "connectivity"
+
+    @pytest.mark.asyncio
+    async def test_skips_when_ha_disabled(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=False)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_service_discovery()
+
+        pub.mqtt_helper.safe_publish.assert_not_called()
+
+
+class TestCameraDiscovery:
+    @pytest.mark.asyncio
+    async def test_triggered_on_first_detection(self, sample_vision_config):
+        sample_vision_config["retain_presence"] = True
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        event = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event, result)
+
+        # camera discovery should have been published
+        disc_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "homeassistant/device" in c.args[0] and "cam1" in c.args[0]]
+        assert len(disc_calls) == 1
+        payload = json.loads(disc_calls[0].args[1])
+        assert payload["device"]["name"] == "Front Yard"
+        assert payload["device"]["via_device"] == "vision2mqtt"
+        assert "cam1" in pub.seen_cameras
+
+    @pytest.mark.asyncio
+    async def test_not_repeated_on_second_detection(self, sample_vision_config):
+        sample_vision_config["retain_presence"] = True
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        event = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event, result)
+            pub.mqtt_helper.safe_publish.reset_mock()
+
+            event2 = MotionEvent("cam1", "Front Yard", "ev2", "", "2026-02-14T15:31:00", "test")
+            await pub.publish_vision_result(event2, result)
+
+        # no camera discovery on second call
+        disc_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "homeassistant/device" in c.args[0]]
+        assert len(disc_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_camera_discovery_has_label_sensors(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        cmps = payload["cmps"]
+        # binary sensor per label
+        assert "presence_person" in cmps
+        assert "presence_vehicle" in cmps
+        assert "presence_animal" in cmps
+        assert "presence_bird" in cmps
+        # sensor entities
+        assert "object_count" in cmps
+        assert "last_detection" in cmps
+        assert "processing_time" in cmps
+        # verify types
+        assert cmps["presence_person"]["p"] == "binary_sensor"
+        assert cmps["object_count"]["p"] == "sensor"
+        assert cmps["processing_time"]["unit_of_measurement"] == "ms"
+
+
+class TestCameraState:
+    @pytest.mark.asyncio
+    async def test_publishes_sensor_values(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_state("cam1", 3, 12.345, "2026-02-14T15:30:45")
+
+        topics = [c.args[0] for c in pub.mqtt_helper.safe_publish.call_args_list]
+        assert "vision2mqtt/cam1/sensor/object_count" in topics
+        assert "vision2mqtt/cam1/sensor/last_detection" in topics
+        assert "vision2mqtt/cam1/sensor/processing_time" in topics
+
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            if c.args[0] == "vision2mqtt/cam1/sensor/object_count":
+                assert c.args[1] == "3"
+            elif c.args[0] == "vision2mqtt/cam1/sensor/processing_time":
+                assert c.args[1] == "12.3"
+
+    @pytest.mark.asyncio
+    async def test_skips_when_ha_disabled(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=False)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_state("cam1", 3, 12.345, "2026-02-14T15:30:45")
+
+        pub.mqtt_helper.safe_publish.assert_not_called()
