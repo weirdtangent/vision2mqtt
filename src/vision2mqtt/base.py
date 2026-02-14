@@ -52,6 +52,7 @@ class Base:
 
         self.ha_enabled: bool = self.config.get("home_assistant", True)
         self.seen_cameras: set[str] = set()
+        self._camera_discovery_lock = asyncio.Lock()
 
         max_queue = self.vision_config.get("max_queue", 20)
         self.queue: asyncio.Queue[MotionEvent] = asyncio.Queue(maxsize=max_queue)

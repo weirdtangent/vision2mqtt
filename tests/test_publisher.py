@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
+import asyncio
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -16,6 +17,7 @@ class FakePublisher(PublishMixin):
         self.qos = 0
         self.ha_enabled = ha_enabled
         self.seen_cameras: set[str] = set()
+        self._camera_discovery_lock = asyncio.Lock()
         self.config = {"version": "v0.1.0-test"}
         self.mqtt_config = {"discovery_prefix": "homeassistant"}
         self.logger = MagicMock()

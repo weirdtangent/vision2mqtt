@@ -151,14 +151,16 @@ class PublishMixin:
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
         prefix = self.service
 
-        # lazy camera discovery on first detection
+        # lazy camera discovery on first detection (lock guards concurrent workers)
         if self.ha_enabled and event.camera_id not in self.seen_cameras:
-            try:
-                await self.publish_camera_discovery(event.camera_id, event.camera_name)
-            except Exception:
-                self.logger.exception("Failed to publish camera discovery for '%s'", event.camera_id)
-            else:
-                self.seen_cameras.add(event.camera_id)
+            async with self._camera_discovery_lock:
+                if event.camera_id not in self.seen_cameras:
+                    try:
+                        await self.publish_camera_discovery(event.camera_id, event.camera_name)
+                    except Exception:
+                        self.logger.exception("Failed to publish camera discovery for '%s'", event.camera_id)
+                    else:
+                        self.seen_cameras.add(event.camera_id)
 
         # publish objects list
         objects_topic = f"{prefix}/{event.camera_id}/{event.event_id}/objects"
