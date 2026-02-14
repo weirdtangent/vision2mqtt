@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 
 
 class PublishMixin:
+    async def publish_service_discovery(self: Vision2Mqtt) -> None:
+        pass
+
+    async def publish_service_availability(self: Vision2Mqtt) -> None:
+        pass
+
+    async def publish_service_state(self: Vision2Mqtt) -> None:
+        pass
+
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
         prefix = self.service
 
