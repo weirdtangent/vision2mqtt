@@ -1,0 +1,167 @@
+[build-system]
+requires = ["setuptools>=68", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vision2mqtt"
+dynamic = ["version"]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "paho-mqtt>=2.1.0",
+    "pyyaml>=6.0.3",
+    "pillow>=11.0.0",
+    "numpy>=2.0.0",
+    "json-logging-graystorm",
+    "mqtt-helper-graystorm",
+]
+
+[project.scripts]
+vision2mqtt = "vision2mqtt.app:main"
+
+[project.optional-dependencies]
+ultralytics = [
+    "ultralytics>=8.3.0",
+]
+dev = [
+    # linting/formatting
+    "black>=24.10.0",
+    "ruff>=0.6.9",
+
+    # testing/coverage
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+vision2mqtt = ["VERSION"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["vision2mqtt*"]
+
+[tool.setuptools_scm]
+
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+line-length = 160
+indent-width = 4
+
+target-version = "py313"
+
+[tool.pyright]
+include = [ "src" ]
+extraPaths = [ "src" ]
+venvPath = "./.venv"
+typeCheckingMode = "basic"
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--quiet"
+testpaths = "tests"
+pythonpath = "src"
+
+[tool.coverage.run]
+branch = true
+source = ["vision2mqtt"]
+omit = [
+    "tests/*",
+    "*/__init__.py",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/site-packages/*"
+]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_lines = [
+    "pragma: no cover"
+]
+
+[tool.black]
+line-length = 160
+target-version = ["py313"]
+extend-exclude = '''
+/(
+  \.venv
+ |\.ruff_cache
+ |\.pytest_cache
+ |node_modules
+ |dist
+ |build
+)/
+'''
+
+[tool.uv.sources]
+json-logging-graystorm = { git = "https://github.com/weirdtangent/json_logging.git", branch = "main" }
+mqtt-helper-graystorm = { git = "https://github.com/weirdtangent/mqtt-helper.git", branch = "main" }
+
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "ruff>=0.14.1",
+    "types-pyyaml>=6.0.12.20250915",
+]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_redundant_casts = true
+warn_unreachable = true
+strict_equality = true
+allow_untyped_globals = false
+allow_redefinition = false
+no_implicit_optional = true
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = [
+  "paho.*",
+  "ultralytics.*",
+  "pyaxcl.*",
+]
+ignore_missing_imports = true

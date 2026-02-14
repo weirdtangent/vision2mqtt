@@ -1,0 +1,31 @@
+# Example configuration for vision2mqtt
+# Copy this file to config.yaml and adjust values as needed.
+
+mqtt:
+  host: 10.10.10.1               # MQTT broker hostname or IP (Synology w/ Mosquitto)
+  port: 1883                     # MQTT port (usually 1883 or 8883 for TLS)
+  username: mqtt                 # MQTT username
+  password: password             # MQTT password
+  qos: 0                         # MQTT QoS level (0, 1, or 2)
+  protocol_version: "5"          # MQTT protocol version: 3.1.1/3 or 5
+  prefix: vision2mqtt            # MQTT topic prefix
+  tls_enabled: false             # Enable TLS for MQTT (true/false)
+  tls_ca_cert: /config/ca.crt    # Path to CA certificate (if TLS enabled)
+  tls_cert: /config/client.crt   # Path to client certificate (if TLS enabled)
+  tls_key: /config/client.key    # Path to client private key (if TLS enabled)
+
+vision:
+  backend: ultralytics           # "axcl" for AX8850 NPU, "ultralytics" for CPU fallback
+  model: yolo11n.pt              # model path for axcl (.axmodel), or model name for ultralytics
+  subscribe_topics:              # topics to listen for vision requests
+    - "+/vision/request"
+  labels:                        # simplified labels to report (see labels.py for mapping)
+    - person
+    - vehicle
+    - animal
+    - bird
+  min_confidence: 0.45           # minimum confidence threshold for detections
+  concurrency: 1                 # number of worker tasks processing the queue
+  max_queue: 20                  # max queued vision requests (oldest dropped when full)
+  retain_presence: false          # publish retained ON/OFF presence per camera per label
+  debug_save_images: false        # save annotated images to /tmp for debugging

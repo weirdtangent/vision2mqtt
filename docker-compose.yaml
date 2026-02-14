@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  vision2mqtt:
+    image: graystorm/vision2mqtt:latest
+    container_name: vision2mqtt
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config:/config
+      - ./models:/models
+    environment:
+      - TZ=America/New_York
+    healthcheck:
+      test: ["CMD", "python3", "/app/src/healthcheck.py"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      org.opencontainers.image.title: "vision2mqtt"
+      org.opencontainers.image.description: "YOLO object detection service for MQTT camera events"
+      org.opencontainers.image.source: "https://github.com/weirdtangent/vision2mqtt"
+      org.opencontainers.image.documentation: "https://github.com/weirdtangent/vision2mqtt#readme"
+      org.opencontainers.image.licenses: "MIT"
+      org.opencontainers.image.version: "${VISION2MQTT_TAG:-latest}"
+      org.opencontainers.image.authors: "weirdTangent <jeff@weirdtangent.com>"
+      org.opencontainers.image.url: "https://www.graystorm.com"

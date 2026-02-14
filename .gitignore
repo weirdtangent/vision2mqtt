@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+lib/
+include/
+node_modules/
+
+# Environments
+.env
+.venv
+venv/
+.vscode/
+.claude/
+
+# Local testing and notes
+config
+config/
+config.yaml
+npm-debug.log
+NOTES
+coverage/
+dist/
+tools/
+
+# Apple
+.DS_Store
