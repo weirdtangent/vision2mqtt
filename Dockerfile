@@ -49,7 +49,13 @@ COPY . .
 # 5. Install the app itself (pretend version visible, no deps)
 RUN SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION} uv pip install --no-cache-dir . --no-deps
 
-# 6. Cleanup
+# 6. Install pyaxcl for AX8850 NPU support (optional at runtime, pure-python wheel from AXERA-TECH)
+ARG PYAXCL_VERSION=3.10.2-1
+RUN uv pip install --no-cache-dir \
+    "https://github.com/AXERA-TECH/pyaxcl/releases/download/v${PYAXCL_VERSION}/pyaxcl-${PYAXCL_VERSION%-*}-py3-none-any.whl" \
+    || true
+
+# 7. Cleanup
 RUN rm -f /tmp/reqs.all.txt /tmp/reqs.deps.txt .git || true
 
 # ===== Non-root Runtime User =====
