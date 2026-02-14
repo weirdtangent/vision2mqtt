@@ -48,14 +48,19 @@ class PublishMixin:
             },
         }
 
-        topic = self.mqtt_helper.disc_t("device", device_id)
+        discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
+        topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{device_id}/config"
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
         self.logger.debug(f"published HA service discovery to {topic}")
 
     async def publish_service_availability(self: Vision2Mqtt, status: str = "online") -> None:
+        if not self.ha_enabled:
+            return
         await asyncio.to_thread(self.mqtt_helper.safe_publish, self.mqtt_helper.avty_t("service"), status)
 
     async def publish_service_state(self: Vision2Mqtt) -> None:
+        if not self.ha_enabled:
+            return
         await asyncio.to_thread(
             self.mqtt_helper.safe_publish,
             self.mqtt_helper.stat_t("service", "service", "server"),
@@ -129,7 +134,8 @@ class PublishMixin:
             "cmps": cmps,
         }
 
-        topic = self.mqtt_helper.disc_t("device", camera_id)
+        discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
+        topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{camera_id}/config"
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
         self.logger.info(f"published HA camera discovery for '{camera_name}' ({camera_id})")
 
@@ -147,8 +153,12 @@ class PublishMixin:
 
         # lazy camera discovery on first detection
         if self.ha_enabled and event.camera_id not in self.seen_cameras:
-            self.seen_cameras.add(event.camera_id)
-            await self.publish_camera_discovery(event.camera_id, event.camera_name)
+            try:
+                await self.publish_camera_discovery(event.camera_id, event.camera_name)
+            except Exception:
+                self.logger.exception("Failed to publish camera discovery for '%s'", event.camera_id)
+            else:
+                self.seen_cameras.add(event.camera_id)
 
         # publish objects list
         objects_topic = f"{prefix}/{event.camera_id}/{event.event_id}/objects"

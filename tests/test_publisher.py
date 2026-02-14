@@ -17,6 +17,7 @@ class FakePublisher(PublishMixin):
         self.ha_enabled = ha_enabled
         self.seen_cameras: set[str] = set()
         self.config = {"version": "v0.1.0-test"}
+        self.mqtt_config = {"discovery_prefix": "homeassistant"}
         self.logger = MagicMock()
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.safe_publish = MagicMock()
@@ -24,7 +25,6 @@ class FakePublisher(PublishMixin):
         self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
         self.mqtt_helper.dev_unique_id = MagicMock(side_effect=lambda d, e: f"vision2mqtt_{d}_{e}")
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
-        self.mqtt_helper.disc_t = MagicMock(side_effect=lambda c, i: f"homeassistant/{c}/vision2mqtt_{i}/config")
         self.mqtt_helper.stat_t = MagicMock(side_effect=lambda *args: "/".join(["vision2mqtt"] + [str(a) for a in args if a != "service"]))
         self.mqtt_helper.avty_t = MagicMock(return_value="vision2mqtt/availability")
 
@@ -122,7 +122,6 @@ class TestServiceDiscovery:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_service_discovery()
 
-        pub.mqtt_helper.disc_t.assert_called_once_with("device", "service")
         pub.mqtt_helper.safe_publish.assert_called_once()
         topic = pub.mqtt_helper.safe_publish.call_args.args[0]
         payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])

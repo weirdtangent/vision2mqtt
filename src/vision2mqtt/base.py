@@ -75,10 +75,11 @@ class Base:
         self.running = False
 
         if cast(Any, self).mqttc is not None:
-            try:
-                await cast(Any, self).publish_service_availability("offline")
-            except Exception as err:
-                self.logger.debug(f"publish offline failed: {err!r}")
+            if self.ha_enabled:
+                try:
+                    await cast(Any, self).publish_service_availability("offline")
+                except Exception as err:
+                    self.logger.debug(f"publish offline failed: {err!r}")
 
             try:
                 cast(Any, self).mqttc.loop_stop()
