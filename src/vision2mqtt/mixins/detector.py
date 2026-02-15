@@ -77,10 +77,11 @@ class DetectorMixin:
         backend = self.vision_config["backend"]
         start = time.monotonic()
 
+        annotated_b64: str | None = None
         if backend == "ultralytics":
-            objects = await asyncio.to_thread(self._detect_ultralytics, event.image_b64)
+            objects, annotated_b64 = await asyncio.to_thread(self._detect_ultralytics, event.image_b64)
         elif backend == "axcl":
-            objects = await asyncio.to_thread(self._detect_axcl, event.image_b64)
+            objects, annotated_b64 = await asyncio.to_thread(self._detect_axcl, event.image_b64)
         else:
             objects = []
 
@@ -107,9 +108,9 @@ class DetectorMixin:
                     )
                 )
 
-        return VisionResult(objects=filtered, all_detections=all_detections, processing_time_ms=round(elapsed_ms, 1))
+        return VisionResult(objects=filtered, all_detections=all_detections, processing_time_ms=round(elapsed_ms, 1), annotated_image_b64=annotated_b64)
 
-    def _detect_ultralytics(self: Vision2Mqtt, image_b64: str) -> list[DetectedObject]:
+    def _detect_ultralytics(self: Vision2Mqtt, image_b64: str) -> tuple[list[DetectedObject], str]:
         from PIL import Image
 
         image_bytes = base64.b64decode(image_b64)
@@ -144,7 +145,18 @@ class DetectorMixin:
                         bbox=bbox,
                     )
                 )
-        return objects
+
+        # generate annotated image with bounding boxes drawn by ultralytics
+        annotated_bgr = results[0].plot() if results else None
+        if annotated_bgr is not None:
+            annotated_img = Image.fromarray(annotated_bgr[..., ::-1])  # BGR -> RGB
+            buf = io.BytesIO()
+            annotated_img.save(buf, format="JPEG", quality=80)
+            annotated_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        else:
+            annotated_b64 = base64.b64encode(image_bytes).decode("ascii")
+
+        return objects, annotated_b64
 
     # COCO class names (80 classes) used by YOLO models
     _COCO_NAMES: list[str] = [
@@ -389,9 +401,9 @@ class DetectorMixin:
         keep_arr = np.array(keep)
         return np.column_stack([all_boxes_arr[keep_arr], confs[keep_arr], cls_ids[keep_arr].astype(np.float32)])  # (K, 6)
 
-    def _detect_axcl(self: Vision2Mqtt, image_b64: str) -> list[DetectedObject]:
+    def _detect_axcl(self: Vision2Mqtt, image_b64: str) -> tuple[list[DetectedObject], str]:
         import numpy as np
-        from PIL import Image
+        from PIL import Image, ImageDraw, ImageFont
 
         image_bytes = base64.b64decode(image_b64)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -448,4 +460,23 @@ class DetectorMixin:
                 )
             )
 
-        return objects
+        # draw bounding boxes on original image for annotated snapshot
+        annotated = image.copy()
+        draw = ImageDraw.Draw(annotated)
+        try:
+            font: Any = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(12, img_h // 30))
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+        for obj in objects:
+            bx1 = int(obj.bbox[0] * img_w)
+            by1 = int(obj.bbox[1] * img_h)
+            bx2 = int(obj.bbox[2] * img_w)
+            by2 = int(obj.bbox[3] * img_h)
+            draw.rectangle([bx1, by1, bx2, by2], outline="lime", width=2)
+            draw.text((bx1, max(0, by1 - 14)), f"{obj.raw_label} {obj.confidence:.0%}", fill="lime", font=font)
+
+        buf = io.BytesIO()
+        annotated.save(buf, format="JPEG", quality=80)
+        annotated_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+        return objects, annotated_b64
