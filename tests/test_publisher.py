@@ -5,11 +5,12 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
+from vision2mqtt.mixins.composites import CompositesMixin
 from vision2mqtt.mixins.publish import PublishMixin
 from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
 
 
-class FakePublisher(PublishMixin):
+class FakePublisher(CompositesMixin, PublishMixin):
     def __init__(self, vision_config, ha_enabled=False):
         self.vision_config = vision_config
         self.service = "vision2mqtt"
@@ -114,6 +115,87 @@ class TestPublishVisionResult:
             elif "presence" in c.args[0]:
                 assert c.args[1] == "OFF"
 
+    @pytest.mark.asyncio
+    async def test_parent_presence_activated_by_specific_label(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "car", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+        }
+        pub = FakePublisher(config)
+
+        event = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result = VisionResult(
+            objects=[
+                DetectedObject(label="car", raw_label="car", confidence=0.85, bbox=[0.5, 0.1, 0.9, 0.5]),
+            ],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event, result)
+
+        presence_states = {}
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            topic = c.args[0]
+            if "/presence/" in topic:
+                label = topic.rsplit("/", 1)[-1]
+                presence_states[label] = c.args[1]
+
+        assert presence_states["car"] == "ON"
+        assert presence_states["vehicle"] == "ON"
+        assert presence_states["person"] == "OFF"
+
+    @pytest.mark.asyncio
+    async def test_composite_presence_published(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": ["group"],
+        }
+        pub = FakePublisher(config)
+
+        event = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result = VisionResult(
+            objects=[
+                DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.1, 0.3, 0.8]),
+                DetectedObject(label="person", raw_label="person", confidence=0.75, bbox=[0.4, 0.1, 0.6, 0.8]),
+            ],
+            all_detections=[
+                DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.1, 0.3, 0.8]),
+                DetectedObject(label="person", raw_label="person", confidence=0.75, bbox=[0.4, 0.1, 0.6, 0.8]),
+            ],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event, result)
+
+        presence_states = {}
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            topic = c.args[0]
+            if "/presence/" in topic:
+                label = topic.rsplit("/", 1)[-1]
+                presence_states[label] = c.args[1]
+
+        assert presence_states["group"] == "ON"
+
 
 class TestServiceDiscovery:
     @pytest.mark.asyncio
@@ -165,7 +247,7 @@ class TestCameraDiscovery:
         disc_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "homeassistant/device" in c.args[0] and "cam1" in c.args[0]]
         assert len(disc_calls) == 1
         payload = json.loads(disc_calls[0].args[1])
-        assert payload["device"]["name"] == "Front Yard"
+        assert payload["device"]["name"] == "Front Yard Vision"
         assert payload["device"]["via_device"] == "vision2mqtt"
         assert "cam1" in pub.seen_cameras
 
@@ -215,6 +297,59 @@ class TestCameraDiscovery:
         assert cmps["presence_person"]["p"] == "binary_sensor"
         assert cmps["object_count"]["p"] == "sensor"
         assert cmps["processing_time"]["unit_of_measurement"] == "ms"
+
+    @pytest.mark.asyncio
+    async def test_camera_discovery_uses_distinct_icons(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        cmps = payload["cmps"]
+        assert cmps["presence_person"]["icon"] == "mdi:account"
+        assert cmps["presence_vehicle"]["icon"] == "mdi:car-side"
+        assert cmps["presence_animal"]["icon"] == "mdi:paw"
+        assert cmps["presence_bird"]["icon"] == "mdi:bird"
+
+    @pytest.mark.asyncio
+    async def test_camera_discovery_vision_suffix(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        assert payload["device"]["name"] == "Front Yard Vision"
+
+    @pytest.mark.asyncio
+    async def test_camera_discovery_includes_composites(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": False,
+            "debug_save_images": False,
+            "composites": ["dog_walker", "group"],
+        }
+        pub = FakePublisher(config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        cmps = payload["cmps"]
+        assert "presence_dog_walker" in cmps
+        assert cmps["presence_dog_walker"]["icon"] == "mdi:dog-service"
+        assert "presence_group" in cmps
+        assert cmps["presence_group"]["icon"] == "mdi:account-group"
 
 
 class TestCameraState:

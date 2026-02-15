@@ -2,6 +2,7 @@
 # Copyright (c) 2025 Jeff Culverhouse
 from .mixins.helpers import HelpersMixin
 from .mixins.labels import LabelsMixin
+from .mixins.composites import CompositesMixin
 from .mixins.detector import DetectorMixin
 from .mixins.publish import PublishMixin
 from .mixins.loops import LoopsMixin
@@ -12,6 +13,7 @@ from .base import Base
 class Vision2Mqtt(
     HelpersMixin,
     LabelsMixin,
+    CompositesMixin,
     DetectorMixin,
     PublishMixin,
     LoopsMixin,
