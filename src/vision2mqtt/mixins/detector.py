@@ -37,10 +37,10 @@ class DetectorMixin:
         return model
 
     def _load_axcl_model(self: Vision2Mqtt, model_path: str) -> Any:
-        import pyaxcl
+        import axcl
 
-        pyaxcl.setup(0)
-        model = pyaxcl.InferenceSession(model_path)
+        axcl.setup(0)
+        model = axcl.InferenceSession(model_path)
         return model
 
     async def detect_objects(self: Vision2Mqtt, event: MotionEvent) -> VisionResult:
