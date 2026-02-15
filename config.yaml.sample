@@ -19,7 +19,7 @@ mqtt:
 
 vision:
   backend: ultralytics           # "axcl" for AX8850 NPU, "ultralytics" for CPU fallback
-  model: yolo11n.pt              # model path for axcl (.axmodel), or model name for ultralytics
+  model: yolo26n.pt              # model path for axcl (.axmodel), or model name for ultralytics
   subscribe_topics:              # topics to listen for vision requests
     - "+/vision/request"
   labels:                        # simplified labels to report (see labels.py for mapping)
