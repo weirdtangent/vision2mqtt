@@ -16,7 +16,8 @@ _PROXIMITY_THRESHOLD = 0.15
 _COMPOSITE_COMPANIONS: dict[str, set[str]] = {
     "dog_walker": {"dog"},
     "cyclist": {"bicycle"},
-    "package_carrier": {"backpack", "suitcase", "handbag"},
+    "student": {"backpack"},
+    "package_carrier": {"suitcase", "handbag"},
 }
 
 

@@ -78,7 +78,7 @@ class TestLabelMapping:
         assert len(LABEL_PARENTS) == 14
 
     def test_label_icons_has_expected_entries(self):
-        assert len(LABEL_ICONS) == 16
+        assert len(LABEL_ICONS) == 17
         for key in (
             "person",
             "vehicle",
@@ -95,6 +95,7 @@ class TestLabelMapping:
             "dog_walker",
             "group",
             "cyclist",
+            "student",
             "package_carrier",
         ):
             assert key in LABEL_ICONS

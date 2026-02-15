@@ -93,7 +93,8 @@ vision:
     - group                        # 2+ people detected
     - dog_walker                   # person + dog nearby
     - cyclist                      # person + bicycle nearby
-    - package_carrier              # person + backpack/suitcase/handbag nearby
+    - student                      # person + backpack nearby
+    - package_carrier              # person + suitcase/handbag nearby
 ```
 
 ### Environment Variables
@@ -109,7 +110,8 @@ When enabled via the `composites` config, vision2mqtt can detect higher-level sc
 | `group` | 2+ people | Multiple people detected in the same frame |
 | `dog_walker` | person + dog | A person near a dog |
 | `cyclist` | person + bicycle | A person near a bicycle |
-| `package_carrier` | person + backpack/suitcase/handbag | A person carrying a package |
+| `student` | person + backpack | A person near a backpack |
+| `package_carrier` | person + suitcase/handbag | A person carrying a suitcase or handbag |
 
 Composites use **all detections** (pre-label-filter), so companion objects like `dog` or `bicycle` are detected even if they aren't in your `labels` list. Each composite is published as a retained `ON`/`OFF` presence topic and as a Home Assistant binary sensor when HA discovery is enabled.
 

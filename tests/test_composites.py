@@ -120,9 +120,9 @@ class TestCyclist:
         assert composites["cyclist"] is False
 
 
-class TestPackageCarrier:
+class TestStudent:
     def test_person_near_backpack(self):
-        fc = FakeComposites(["package_carrier"])
+        fc = FakeComposites(["student"])
         result = VisionResult(
             all_detections=[
                 _det("person", [0.2, 0.1, 0.4, 0.8]),
@@ -130,8 +130,20 @@ class TestPackageCarrier:
             ]
         )
         composites = fc.compute_composites(result)
-        assert composites["package_carrier"] is True
+        assert composites["student"] is True
 
+    def test_person_alone(self):
+        fc = FakeComposites(["student"])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.2, 0.1, 0.4, 0.8]),
+            ]
+        )
+        composites = fc.compute_composites(result)
+        assert composites["student"] is False
+
+
+class TestPackageCarrier:
     def test_person_near_suitcase(self):
         fc = FakeComposites(["package_carrier"])
         result = VisionResult(
