@@ -119,19 +119,97 @@ class TestResolveInputLayout:
             DetectorMixin._resolve_input_layout([640, 640, 3])
 
 
+class TestPostprocessYoloRaw:
+    def test_single_detection(self):
+        """A single high-confidence detection in the center of a small grid."""
+        # 2x2 grid, 144 channels (64 DFL + 80 classes), stride = 640/2 = 320
+        head = np.zeros((1, 2, 2, 144), dtype=np.float32)
+        # place a detection at grid cell (0, 0): set class 0 (person) logit high
+        head[0, 0, 0, 64] = 10.0  # sigmoid(10) ≈ 1.0 for class 0
+        # DFL: set bin 8 high for all 4 coords (center of range)
+        for coord in range(4):
+            head[0, 0, 0, coord * 16 + 8] = 10.0
+
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80)
+        assert result.shape[1] == 6
+        assert len(result) >= 1
+        # best detection should be class 0 (person) with high confidence
+        assert int(result[0, 5]) == 0
+        assert result[0, 4] > 0.9
+
+    def test_empty_output(self):
+        """All-zero feature maps should produce no confident detections."""
+        head = np.zeros((1, 2, 2, 144), dtype=np.float32)
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80)
+        # class logits are all 0 -> sigmoid = 0.5, which is low; expect no confident detections
+        # or at least all below typical threshold
+        if len(result) > 0:
+            assert result[:, 4].max() <= 0.5
+
+    def test_nms_suppresses_overlapping(self):
+        """Two overlapping detections of the same class should be suppressed to one."""
+        # 4x4 grid, stride = 160
+        head = np.zeros((1, 4, 4, 144), dtype=np.float32)
+        # set all class logits very negative so only our targets have high confidence
+        head[..., 64:] = -20.0
+        # two adjacent cells with same high-confidence class 0
+        for row in [1, 2]:
+            head[0, row, 1, 64] = 10.0  # class 0 logit
+            for coord in range(4):
+                head[0, row, 1, coord * 16 + 4] = 10.0  # similar bbox
+
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80, nms_iou=0.45)
+        high_conf = result[result[:, 4] > 0.9]
+        assert len(high_conf) == 1  # NMS keeps only one high-confidence detection
+
+    def test_multi_head(self):
+        """Multiple output heads are concatenated before NMS."""
+        head1 = np.zeros((1, 4, 4, 144), dtype=np.float32)
+        head2 = np.zeros((1, 2, 2, 144), dtype=np.float32)
+        # one detection in each head, different locations
+        head1[0, 0, 0, 64] = 10.0
+        for c in range(4):
+            head1[0, 0, 0, c * 16 + 2] = 10.0
+        head2[0, 1, 1, 66] = 10.0  # class 2 (car)
+        for c in range(4):
+            head2[0, 1, 1, c * 16 + 12] = 10.0
+
+        result = DetectorMixin._postprocess_yolo_raw([head1, head2], input_size=640, num_classes=80)
+        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        assert 0 in classes  # person from head1
+        assert 2 in classes  # car from head2
+
+    def test_chw_layout(self):
+        """CHW layout heads should be handled correctly."""
+        head_hwc = np.zeros((1, 4, 4, 144), dtype=np.float32)
+        head_hwc[0, 0, 0, 64] = 10.0
+        for c in range(4):
+            head_hwc[0, 0, 0, c * 16 + 8] = 10.0
+
+        # transpose to CHW
+        head_chw = np.transpose(head_hwc, (0, 3, 1, 2))
+        assert head_chw.shape == (1, 144, 4, 4)
+
+        result = DetectorMixin._postprocess_yolo_raw([head_chw], input_size=640, num_classes=80)
+        assert len(result) >= 1
+        assert int(result[0, 5]) == 0
+
+
 class TestAxclBackend:
     @pytest.mark.asyncio
     async def test_detect_axcl_returns_objects(self, sample_vision_config):
         sample_vision_config["backend"] = "axcl"
         detector = FakeDetector(sample_vision_config)
 
-        # mock session with one detection: person at bbox, confidence 0.9
         mock_session = MagicMock()
-        mock_session.run.return_value = [np.array([[[320, 200, 500, 450, 0.9, 0]]], dtype=np.float32)]  # [batch, num_det, 6]
+        mock_session.run.return_value = [np.zeros((1, 2, 2, 144), dtype=np.float32)]
         detector._detector_model = mock_session
 
-        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
-        result = await detector.detect_objects(event)
+        # mock postprocess to return a known detection
+        post_result = np.array([[320, 200, 500, 450, 0.9, 0]], dtype=np.float32)
+        with patch.object(DetectorMixin, "_postprocess_yolo_raw", return_value=post_result):
+            event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
 
         assert len(result.objects) == 1
         assert result.objects[0].label == "person"
@@ -151,19 +229,19 @@ class TestAxclBackend:
         detector = FakeDetector(sample_vision_config)
 
         mock_session = MagicMock()
-        mock_session.run.return_value = [
-            np.array(
-                [
-                    [[320, 200, 500, 450, 0.9, 0]],  # person, high conf
-                    [[100, 100, 200, 200, 0.3, 2]],  # car, low conf
-                ],
-                dtype=np.float32,
-            ).reshape(1, 2, 6)
-        ]
+        mock_session.run.return_value = [np.zeros((1, 2, 2, 144), dtype=np.float32)]
         detector._detector_model = mock_session
 
-        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
-        result = await detector.detect_objects(event)
+        post_result = np.array(
+            [
+                [320, 200, 500, 450, 0.9, 0],  # person, high conf
+                [100, 100, 200, 200, 0.3, 2],  # car, low conf
+            ],
+            dtype=np.float32,
+        )
+        with patch.object(DetectorMixin, "_postprocess_yolo_raw", return_value=post_result):
+            event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
 
         assert len(result.objects) == 1
         assert result.objects[0].label == "person"
@@ -175,11 +253,12 @@ class TestAxclBackend:
         detector._axcl_nchw = True
 
         mock_session = MagicMock()
-        mock_session.run.return_value = [np.array([[[320, 200, 500, 450, 0.9, 0]]], dtype=np.float32)]
+        mock_session.run.return_value = [np.zeros((1, 2, 2, 144), dtype=np.float32)]
         detector._detector_model = mock_session
 
-        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
-        await detector.detect_objects(event)
+        with patch.object(DetectorMixin, "_postprocess_yolo_raw", return_value=np.empty((0, 6), dtype=np.float32)):
+            event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            await detector.detect_objects(event)
 
         # verify input was transposed to NCHW (1, 3, H, W)
         input_array = mock_session.run.call_args[0][1]["images"]
@@ -191,10 +270,11 @@ class TestAxclBackend:
         detector = FakeDetector(sample_vision_config)
 
         mock_session = MagicMock()
-        mock_session.run.return_value = [np.array([], dtype=np.float32).reshape(1, 0, 6)]
+        mock_session.run.return_value = [np.zeros((1, 2, 2, 144), dtype=np.float32)]
         detector._detector_model = mock_session
 
-        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
-        result = await detector.detect_objects(event)
+        with patch.object(DetectorMixin, "_postprocess_yolo_raw", return_value=np.empty((0, 6), dtype=np.float32)):
+            event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
 
         assert len(result.objects) == 0
