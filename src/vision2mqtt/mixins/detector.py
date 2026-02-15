@@ -259,9 +259,6 @@ class DetectorMixin:
         all_boxes = []
         all_scores = []
 
-        # DFL weight vector for decoding: [0, 1, 2, ..., 15]
-        dfl_weights = np.arange(dfl_bins, dtype=np.float32)
-
         skipped_heads = 0
         for head in outputs:
             # head shape: (1, H, W, C) or (1, C, H, W)
@@ -291,10 +288,11 @@ class DetectorMixin:
             cls_scores = np.where(cls_raw >= 0, 1.0 / (1.0 + np.exp(-cls_raw)), np.exp(cls_raw) / (1.0 + np.exp(cls_raw)))
 
             if head_dfl_bins > 1:
-                # DFL decode (YOLO11): reshape to (H, W, 4, 16), softmax over bins, weighted sum
+                # DFL decode (YOLO11): reshape to (H, W, 4, N), softmax over bins, weighted sum
                 bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, head_dfl_bins)
                 bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
                 bbox_dfl_softmax = bbox_dfl_exp / (np.sum(bbox_dfl_exp, axis=-1, keepdims=True) + 1e-9)
+                dfl_weights = np.arange(head_dfl_bins, dtype=np.float32)
                 bbox_decoded = np.sum(bbox_dfl_softmax * dfl_weights, axis=-1)  # (H, W, 4)
             else:
                 # Direct regression (YOLO26): 4 channels are raw distance values

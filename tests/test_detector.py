@@ -349,6 +349,23 @@ class TestPostprocessYolo26:
         assert 0 in classes  # person from head1
         assert 2 in classes  # car from head2
 
+    def test_mixed_format_heads(self):
+        """A mix of 144-channel (DFL) and 84-channel (direct) heads should both decode."""
+        head_dfl = np.zeros((1, 4, 4, 144), dtype=np.float32)
+        head_direct = np.zeros((1, 2, 2, 84), dtype=np.float32)
+        # DFL head: class 0 (person), DFL bin 8
+        head_dfl[0, 0, 0, 64] = 10.0
+        for c in range(4):
+            head_dfl[0, 0, 0, c * 16 + 8] = 10.0
+        # Direct head: class 2 (car)
+        head_direct[0, 1, 1, 6] = 10.0
+        head_direct[0, 1, 1, 0:4] = 0.5
+
+        result = DetectorMixin._postprocess_yolo_raw([head_dfl, head_direct], input_size=640, num_classes=80)
+        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        assert 0 in classes  # person from DFL head
+        assert 2 in classes  # car from direct head
+
     def test_all_84ch_heads_skipped_raises(self):
         """Raises ValueError when all output heads have wrong channel count."""
         bad_head = np.zeros((1, 4, 4, 100), dtype=np.float32)  # 100 != 84 or 144
