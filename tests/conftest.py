@@ -15,6 +15,7 @@ def sample_vision_config():
         "max_queue": 20,
         "retain_presence": False,
         "debug_save_images": False,
+        "composites": [],
     }
 
 

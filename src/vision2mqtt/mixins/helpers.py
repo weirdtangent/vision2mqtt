@@ -114,6 +114,7 @@ class HelpersMixin:
             "max_queue":     int(str(vision.get("max_queue")        or os.getenv("VISION_MAX_QUEUE", "20"))),
             "retain_presence":  bool(vision.get("retain_presence",   os.getenv("VISION_RETAIN_PRESENCE", "").lower() == "true")),
             "debug_save_images": bool(vision.get("debug_save_images", os.getenv("VISION_DEBUG_SAVE", "").lower() == "true")),
+            "composites":       list(vision.get("composites")       or []),
         }
 
         ha_raw = config.get("home_assistant")

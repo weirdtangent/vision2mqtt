@@ -86,12 +86,19 @@ class DetectorMixin:
 
         elapsed_ms = (time.monotonic() - start) * 1000
 
-        # filter by configured labels and confidence
+        # filter by confidence first
         min_conf = self.vision_config["min_confidence"]
+        confident = [obj for obj in objects if obj.confidence >= min_conf]
+
+        # save all confident detections before label filtering (for composite logic)
+        all_detections = [
+            DetectedObject(label=obj.raw_label, raw_label=obj.raw_label, confidence=round(obj.confidence, 3), bbox=obj.bbox)
+            for obj in confident
+        ]
+
+        # filter by configured labels
         filtered = []
-        for obj in objects:
-            if obj.confidence < min_conf:
-                continue
+        for obj in confident:
             simplified = self.get_simplified_label(obj.raw_label)
             if simplified:
                 filtered.append(
@@ -103,7 +110,7 @@ class DetectorMixin:
                     )
                 )
 
-        return VisionResult(objects=filtered, processing_time_ms=round(elapsed_ms, 1))
+        return VisionResult(objects=filtered, all_detections=all_detections, processing_time_ms=round(elapsed_ms, 1))
 
     def _detect_ultralytics(self: Vision2Mqtt, image_b64: str) -> list[DetectedObject]:
         from PIL import Image

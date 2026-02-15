@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from vision2mqtt.mixins.labels import LABEL_ICONS, LABEL_PARENTS
 from vision2mqtt.models.events import MotionEvent, VisionResult
 
 if TYPE_CHECKING:
@@ -74,6 +75,7 @@ class PublishMixin:
 
         prefix = self.service
         labels = self.vision_config["labels"]
+        composites = self.vision_config.get("composites") or []
 
         # binary sensors for each configured label
         cmps: dict[str, dict] = {}
@@ -86,7 +88,20 @@ class PublishMixin:
                 "payload_on": "ON",
                 "payload_off": "OFF",
                 "device_class": "occupancy" if label == "person" else "motion",
-                "icon": "mdi:account" if label == "person" else "mdi:motion-sensor",
+                "icon": LABEL_ICONS.get(label, "mdi:motion-sensor"),
+            }
+
+        # binary sensors for each composite type
+        for comp in composites:
+            cmps[f"presence_{comp}"] = {
+                "p": "binary_sensor",
+                "name": f"{comp.replace('_', ' ').title()} detected",
+                "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, f"presence_{comp}"),
+                "stat_t": f"{prefix}/{camera_id}/presence/{comp}",
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "device_class": "motion",
+                "icon": LABEL_ICONS.get(comp, "mdi:motion-sensor"),
             }
 
         # sensor: object count
@@ -122,7 +137,7 @@ class PublishMixin:
             "stat_t": self.mqtt_helper.stat_t(camera_id, "state"),
             "avty_t": self.mqtt_helper.avty_t("service"),
             "device": {
-                "name": camera_name,
+                "name": f"{camera_name} Vision",
                 "identifiers": [self.mqtt_helper.device_slug(camera_id)],
                 "via_device": self.mqtt_helper.service_slug,
             },
@@ -138,7 +153,7 @@ class PublishMixin:
         discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
         topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{camera_id}/config"
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
-        self.logger.info(f"published HA camera discovery for '{camera_name}' ({camera_id})")
+        self.logger.info(f"published HA camera discovery for '{camera_name} Vision' ({camera_id})")
 
     async def publish_camera_state(self: Vision2Mqtt, camera_id: str, object_count: int, processing_time_ms: float) -> None:
         if not self.ha_enabled:
@@ -197,10 +212,24 @@ class PublishMixin:
 
         # publish per-label presence (optional, retained)
         if self.vision_config.get("retain_presence"):
-            active_labels = set(obj.label for obj in result.objects)
+            # Collect active specific labels and their parent groups
+            active_labels: set[str] = set()
+            for obj in result.objects:
+                active_labels.add(obj.label)
+                parent = LABEL_PARENTS.get(obj.label)
+                if parent:
+                    active_labels.add(parent)
+
             for label in self.vision_config["labels"]:
                 presence_topic = f"{prefix}/{event.camera_id}/presence/{label}"
                 state = "ON" if label in active_labels else "OFF"
+                await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
+
+            # publish composite presence
+            composites = self.compute_composites(result)
+            for comp_name, comp_state in composites.items():
+                presence_topic = f"{prefix}/{event.camera_id}/presence/{comp_name}"
+                state = "ON" if comp_state else "OFF"
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
 
         # publish camera sensor state for HA
