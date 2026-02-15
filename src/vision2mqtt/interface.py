@@ -35,6 +35,8 @@ class VisionServiceProtocol(Protocol):
     service: str
     vision_config: dict[str, Any]
     _detector_model: Any
+    _axcl_input_name: str
+    _axcl_input_size: int
 
     async def detect_objects(self, event: MotionEvent) -> VisionResult: ...
     async def heartbeat(self) -> None: ...

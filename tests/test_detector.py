@@ -2,6 +2,8 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import base64
 import io
+
+import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +17,8 @@ class FakeDetector(DetectorMixin, LabelsMixin):
         self.vision_config = vision_config
         self.logger = MagicMock()
         self._detector_model = None
+        self._axcl_input_name = "images"
+        self._axcl_input_size = 640
 
 
 def _make_tiny_jpeg_b64():
@@ -83,3 +87,90 @@ class TestDetectorFiltering:
             event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
             result = await detector.detect_objects(event)
             assert result.processing_time_ms >= 0
+
+
+class TestResolveInputSize:
+    def test_nhwc_shape(self):
+        assert DetectorMixin._resolve_input_size([1, 640, 640, 3]) == 640
+
+    def test_nchw_shape(self):
+        assert DetectorMixin._resolve_input_size([1, 3, 640, 640]) == 640
+
+    def test_single_channel_nhwc(self):
+        assert DetectorMixin._resolve_input_size([1, 320, 320, 1]) == 320
+
+    def test_non_square_raises(self):
+        with pytest.raises(ValueError, match="square"):
+            DetectorMixin._resolve_input_size([1, 640, 480, 3])
+
+    def test_ambiguous_shape_raises(self):
+        with pytest.raises(ValueError, match="Unable to determine"):
+            DetectorMixin._resolve_input_size([1, 640, 640, 640])
+
+    def test_non_4d_raises(self):
+        with pytest.raises(ValueError, match="4D"):
+            DetectorMixin._resolve_input_size([640, 640, 3])
+
+
+class TestAxclBackend:
+    @pytest.mark.asyncio
+    async def test_detect_axcl_returns_objects(self, sample_vision_config):
+        sample_vision_config["backend"] = "axcl"
+        detector = FakeDetector(sample_vision_config)
+
+        # mock session with one detection: person at bbox, confidence 0.9
+        mock_session = MagicMock()
+        mock_session.run.return_value = [np.array([[[320, 200, 500, 450, 0.9, 0]]], dtype=np.float32)]  # [batch, num_det, 6]
+        detector._detector_model = mock_session
+
+        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+        result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "person"
+        assert result.objects[0].confidence == 0.9
+
+        # verify session.run was called with correct input name
+        call_args = mock_session.run.call_args
+        assert call_args[0][0] is None
+        assert "images" in call_args[0][1]
+        input_array = call_args[0][1]["images"]
+        assert input_array.shape == (1, 640, 640, 3)
+
+    @pytest.mark.asyncio
+    async def test_detect_axcl_filters_low_confidence(self, sample_vision_config):
+        sample_vision_config["backend"] = "axcl"
+        sample_vision_config["min_confidence"] = 0.5
+        detector = FakeDetector(sample_vision_config)
+
+        mock_session = MagicMock()
+        mock_session.run.return_value = [
+            np.array(
+                [
+                    [[320, 200, 500, 450, 0.9, 0]],  # person, high conf
+                    [[100, 100, 200, 200, 0.3, 2]],  # car, low conf
+                ],
+                dtype=np.float32,
+            ).reshape(1, 2, 6)
+        ]
+        detector._detector_model = mock_session
+
+        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+        result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "person"
+
+    @pytest.mark.asyncio
+    async def test_detect_axcl_empty_output(self, sample_vision_config):
+        sample_vision_config["backend"] = "axcl"
+        detector = FakeDetector(sample_vision_config)
+
+        mock_session = MagicMock()
+        mock_session.run.return_value = [np.array([], dtype=np.float32).reshape(0, 6)]
+        detector._detector_model = mock_session
+
+        event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+        result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 0
