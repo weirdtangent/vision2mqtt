@@ -29,5 +29,9 @@ coverage/
 dist/
 tools/
 
+# Model weights
+*.pt
+*.onnx
+
 # Apple
 .DS_Store
