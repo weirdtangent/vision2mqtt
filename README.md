@@ -166,7 +166,7 @@ COCO classes are simplified to categories useful for home security:
 
 The `axcl` backend is specifically tested on a **Raspberry Pi 5** with the **[M5Stack LLM-8850 Pi HAT](https://docs.m5stack.com/en/ai_hardware/LLM-8850_Card)** kit (AXera AX8850 NPU, 24 TOPS @ INT8, 8GB LPDDR4x).
 
-### Quick start (fresh Raspberry Pi OS 64-bit Lite)
+### Quick start (fresh Debian 13 trixie or Raspberry Pi OS 64-bit Lite)
 
 ```bash
 # 1. Install build deps
@@ -195,8 +195,8 @@ sudo shutdown -h now
 # Unplug and replug power
 
 # 6. Verify
-axcl-smi          # should show AX650N with temp and memory
-docker --version   # should show Docker CE
+/usr/bin/axcl/axcl-smi   # should show AX650N with temp and memory
+docker --version          # should show Docker CE
 ```
 
 ### Deploy vision2mqtt
@@ -222,6 +222,7 @@ services:
     devices:
       - /dev/axcl_host:/dev/axcl_host
       - /dev/ax_mmb_dev:/dev/ax_mmb_dev
+      - /dev/msg_userdev:/dev/msg_userdev
     volumes:
       - ./config:/config
       - ./models:/models
@@ -229,6 +230,12 @@ services:
     environment:
       - TZ=America/New_York
       - LD_LIBRARY_PATH=/usr/lib/axcl
+    healthcheck:
+      test: ["CMD", "python3", "/app/src/healthcheck.py"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 ```
 
 Start:
