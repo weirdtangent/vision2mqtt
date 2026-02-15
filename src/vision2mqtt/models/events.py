@@ -26,3 +26,4 @@ class VisionResult:
     objects: list[DetectedObject] = field(default_factory=list)
     all_detections: list[DetectedObject] = field(default_factory=list)  # pre-label-filter
     processing_time_ms: float = 0.0
+    annotated_image_b64: str | None = None

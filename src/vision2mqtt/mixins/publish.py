@@ -133,6 +133,15 @@ class PublishMixin:
             "icon": "mdi:timer-outline",
         }
 
+        # camera: annotated snapshot with bounding boxes
+        cmps["annotated_image"] = {
+            "p": "camera",
+            "name": "Annotated",
+            "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, "annotated_image"),
+            "t": f"{prefix}/{camera_id}/image/annotated",
+            "image_encoding": "b64",
+        }
+
         device = {
             "stat_t": self.mqtt_helper.stat_t(camera_id, "state"),
             "avty_t": self.mqtt_helper.avty_t("service"),
@@ -231,6 +240,11 @@ class PublishMixin:
                 presence_topic = f"{prefix}/{event.camera_id}/presence/{comp_name}"
                 state = "ON" if comp_state else "OFF"
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
+
+        # publish annotated snapshot image
+        if result.annotated_image_b64:
+            image_topic = f"{prefix}/{event.camera_id}/image/annotated"
+            await asyncio.to_thread(self.mqtt_helper.safe_publish, image_topic, result.annotated_image_b64)
 
         # publish camera sensor state for HA
         await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms)

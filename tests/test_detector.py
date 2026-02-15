@@ -43,7 +43,7 @@ class TestDetectorFiltering:
             DetectedObject(label="person", raw_label="person", confidence=0.3, bbox=[0.5, 0.6, 0.7, 0.8]),
         ]
 
-        with patch.object(detector, "_detect_ultralytics", return_value=raw_objects):
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
             event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
             result = await detector.detect_objects(event)
             assert len(result.objects) == 1
@@ -59,7 +59,7 @@ class TestDetectorFiltering:
             DetectedObject(label="chair", raw_label="chair", confidence=0.9, bbox=[0.5, 0.6, 0.7, 0.8]),
         ]
 
-        with patch.object(detector, "_detect_ultralytics", return_value=raw_objects):
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
             event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
             result = await detector.detect_objects(event)
             assert len(result.objects) == 1
@@ -73,7 +73,7 @@ class TestDetectorFiltering:
             DetectedObject(label="car", raw_label="car", confidence=0.75, bbox=[0.1, 0.2, 0.3, 0.4]),
         ]
 
-        with patch.object(detector, "_detect_ultralytics", return_value=raw_objects):
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
             event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
             result = await detector.detect_objects(event)
             assert len(result.objects) == 1
@@ -84,7 +84,7 @@ class TestDetectorFiltering:
     async def test_processing_time_recorded(self, sample_vision_config):
         detector = FakeDetector(sample_vision_config)
 
-        with patch.object(detector, "_detect_ultralytics", return_value=[]):
+        with patch.object(detector, "_detect_ultralytics", return_value=([], "fake_b64")):
             event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
             result = await detector.detect_objects(event)
             assert result.processing_time_ms >= 0
