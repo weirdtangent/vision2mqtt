@@ -21,7 +21,7 @@ ENV APP_PRETEND_VERSION=${VERSION}
 # ===== System Dependencies =====
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git gosu && \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir uv && \
     rm -rf /var/lib/apt/lists/*
@@ -70,7 +70,8 @@ RUN groupadd -g "${GROUP_ID}" appuser && \
     useradd -u "${USER_ID}" -g "${GROUP_ID}" --create-home --shell /bin/bash appuser && \
     mkdir -p /config /models && chown -R appuser:appuser /app /config /models
 
-USER appuser
+# Pre-register AXCL library path for axengine's ctypes.util.find_library
+RUN echo '/usr/lib/axcl' > /etc/ld.so.conf.d/axcl.conf
 
 # ===== Runtime =====
 ENV SERVICE=${APP_NAME}
@@ -78,5 +79,6 @@ LABEL org.opencontainers.image.title=${APP_NAME} \
       org.opencontainers.image.description=${SERVICE_DESC} \
       org.opencontainers.image.version=${VERSION}
 
-ENTRYPOINT ["python", "-m", "vision2mqtt"]
+COPY entrypoint.sh /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["-c", "/config"]
