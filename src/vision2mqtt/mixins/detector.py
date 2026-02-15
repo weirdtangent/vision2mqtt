@@ -226,8 +226,18 @@ class DetectorMixin:
         "toothbrush",
     ]
 
+    # Pre-NMS confidence threshold to reduce box count before expensive NMS loop
+    _PRE_NMS_CONF: float = 0.25
+
     @staticmethod
-    def _postprocess_yolo_raw(outputs: list[Any], input_size: int, num_classes: int = 80, dfl_bins: int = 16, nms_iou: float = 0.45) -> Any:
+    def _postprocess_yolo_raw(
+        outputs: list[Any],
+        input_size: int,
+        num_classes: int = 80,
+        dfl_bins: int = 16,
+        nms_iou: float = 0.45,
+        pre_nms_conf: float = _PRE_NMS_CONF,
+    ) -> Any:
         """Decode raw YOLO feature maps into [x1, y1, x2, y2, conf, class_id] detections.
 
         Handles multi-head output (e.g. 3 scales: 80x80, 40x40, 20x20) with
@@ -263,10 +273,10 @@ class DetectorMixin:
             bbox_raw = head[..., :dfl_channels]  # (H, W, 64)
             cls_raw = head[..., dfl_channels:]  # (H, W, 80)
 
-            # sigmoid for class scores
-            cls_scores = 1.0 / (1.0 + np.exp(-cls_raw))  # (H, W, 80)
+            # numerically stable sigmoid for class scores
+            cls_scores = np.where(cls_raw >= 0, 1.0 / (1.0 + np.exp(-cls_raw)), np.exp(cls_raw) / (1.0 + np.exp(cls_raw)))
 
-            # decode DFL bbox: reshape to (H, W, 4, 16), softmax, weighted sum
+            # decode DFL bbox: reshape to (H, W, 4, 16), softmax over bins, weighted sum
             bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, dfl_bins)
             bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
             bbox_dfl_softmax = bbox_dfl_exp / np.sum(bbox_dfl_exp, axis=-1, keepdims=True)
@@ -297,7 +307,15 @@ class DetectorMixin:
         cls_ids = np.argmax(all_scores_arr, axis=1)  # (N,)
         confs = all_scores_arr[np.arange(len(cls_ids)), cls_ids]  # (N,)
 
-        # basic NMS (class-agnostic, greedy)
+        # pre-NMS confidence filter to reduce box count
+        conf_mask = confs >= pre_nms_conf
+        if not np.any(conf_mask):
+            return np.empty((0, 6), dtype=np.float32)
+        all_boxes_arr = all_boxes_arr[conf_mask]
+        cls_ids = cls_ids[conf_mask]
+        confs = confs[conf_mask]
+
+        # greedy NMS (class-agnostic)
         order = np.argsort(-confs)
         keep: list[int] = []
         suppressed = np.zeros(len(order), dtype=bool)

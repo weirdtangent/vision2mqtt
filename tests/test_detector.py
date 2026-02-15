@@ -194,6 +194,14 @@ class TestPostprocessYoloRaw:
         assert len(result) >= 1
         assert int(result[0, 5]) == 0
 
+    def test_pre_nms_conf_filters_low_scores(self):
+        """Pre-NMS confidence filter removes low-scoring detections before NMS."""
+        head = np.zeros((1, 4, 4, 144), dtype=np.float32)
+        # all class logits at 0 -> sigmoid = 0.5, just above default 0.25 threshold
+        # with high threshold, all should be filtered
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80, pre_nms_conf=0.9)
+        assert len(result) == 0
+
 
 class TestAxclBackend:
     @pytest.mark.asyncio
