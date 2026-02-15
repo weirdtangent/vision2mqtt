@@ -278,7 +278,7 @@ class DetectorMixin:
         outputs = list(passthrough)
         for _key, parts in split_candidates.items():
             if len(parts) == 2 and {parts[0].shape[-1], parts[1].shape[-1]} == {4, num_classes}:
-                parts.sort(key=lambda p: p.shape[-1])  # bbox (4) first, then classes (80)
+                parts.sort(key=lambda p: p.shape[-1])  # bbox (4) first, then classes (num_classes)
                 outputs.append(np.concatenate(parts, axis=-1))
             else:
                 for p in parts:
