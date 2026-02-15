@@ -9,6 +9,12 @@ services:
     volumes:
       - ./config:/config
       - ./models:/models
+      # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)
+      # - /usr/lib/axcl:/usr/lib/axcl:ro
+    # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)
+    # devices:
+    #   - /dev/axcl_host:/dev/axcl_host
+    #   - /dev/ax_mmb_dev:/dev/ax_mmb_dev
     environment:
       - TZ=America/New_York
     healthcheck:

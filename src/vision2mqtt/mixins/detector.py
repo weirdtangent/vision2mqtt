@@ -37,11 +37,10 @@ class DetectorMixin:
         return model
 
     def _load_axcl_model(self: Vision2Mqtt, model_path: str) -> Any:
-        import axcl
+        import axengine
 
-        axcl.setup(0)
-        model = axcl.InferenceSession(model_path)
-        return model
+        session = axengine.InferenceSession(model_path)
+        return session
 
     async def detect_objects(self: Vision2Mqtt, event: MotionEvent) -> VisionResult:
         backend = self.vision_config["backend"]
@@ -120,8 +119,12 @@ class DetectorMixin:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         img_w, img_h = image.size
 
-        # resize with letterbox to 640x640
-        input_size = 640
+        session = self._detector_model
+        input_info = session.get_inputs()[0]
+        input_shape = input_info.shape  # e.g. [1, 640, 640, 3]
+        input_size = input_shape[1]  # height dimension
+
+        # resize with letterbox
         scale = min(input_size / img_w, input_size / img_h)
         new_w, new_h = int(img_w * scale), int(img_h * scale)
         resized = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
@@ -131,10 +134,10 @@ class DetectorMixin:
         pad_y = (input_size - new_h) // 2
         padded.paste(resized, (pad_x, pad_y))
 
-        input_data = np.array(padded, dtype=np.uint8)
+        input_data = np.array(padded, dtype=np.uint8)[np.newaxis, ...]  # add batch dim
 
         # run inference
-        outputs = self._detector_model.run([input_data])
+        outputs = session.run(None, {input_info.name: input_data})
 
         # parse YOLO output (standard format: [batch, num_detections, 6] or similar)
         # The exact output format depends on the .axmodel export
