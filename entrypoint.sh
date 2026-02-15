@@ -5,4 +5,4 @@ if [ -d /usr/lib/axcl ]; then
     ldconfig 2>/dev/null || true
 fi
 
-exec gosu appuser python -m vision2mqtt "$@"
+exec setpriv --reuid=appuser --regid=appuser --init-groups python -m vision2mqtt "$@"
