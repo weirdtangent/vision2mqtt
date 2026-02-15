@@ -1,3 +1,11 @@
+## [0.2.1](https://github.com/weirdtangent/vision2mqtt/compare/v0.2.0...v0.2.1) (2026-02-15)
+
+
+### Bug Fixes
+
+* add id-token: write permission for claude-code-action ([d57ff36](https://github.com/weirdtangent/vision2mqtt/commit/d57ff36255e4d744b72c5fe0c24f4ae7943a8691))
+* replace pyaxcl with axengine for AX8850 NPU inference ([1d8e460](https://github.com/weirdtangent/vision2mqtt/commit/1d8e4602d9caf77bbe597609c070661ac1c9dace))
+
 # [0.2.0](https://github.com/weirdtangent/vision2mqtt/compare/v0.1.2...v0.2.0) (2026-02-14)
 
 
