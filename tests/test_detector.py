@@ -202,6 +202,12 @@ class TestPostprocessYoloRaw:
         result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80, pre_nms_conf=0.9)
         assert len(result) == 0
 
+    def test_all_heads_skipped_raises(self):
+        """Raises ValueError when all output heads have wrong channel count."""
+        bad_head = np.zeros((1, 4, 4, 100), dtype=np.float32)  # 100 != 144
+        with pytest.raises(ValueError, match="channel mismatch"):
+            DetectorMixin._postprocess_yolo_raw([bad_head], input_size=640, num_classes=80)
+
 
 class TestAxclBackend:
     @pytest.mark.asyncio

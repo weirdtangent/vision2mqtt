@@ -254,6 +254,7 @@ class DetectorMixin:
         # DFL weight vector for decoding: [0, 1, 2, ..., 15]
         dfl_weights = np.arange(dfl_bins, dtype=np.float32)
 
+        skipped_heads = 0
         for head in outputs:
             # head shape: (1, H, W, C) or (1, C, H, W)
             if head.ndim == 4:
@@ -265,6 +266,7 @@ class DetectorMixin:
 
             grid_h, grid_w, channels = head.shape
             if channels != expected_channels:
+                skipped_heads += 1
                 continue
 
             stride = input_size / grid_h
@@ -279,7 +281,7 @@ class DetectorMixin:
             # decode DFL bbox: reshape to (H, W, 4, 16), softmax over bins, weighted sum
             bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, dfl_bins)
             bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
-            bbox_dfl_softmax = bbox_dfl_exp / np.sum(bbox_dfl_exp, axis=-1, keepdims=True)
+            bbox_dfl_softmax = bbox_dfl_exp / (np.sum(bbox_dfl_exp, axis=-1, keepdims=True) + 1e-9)
             bbox_decoded = np.sum(bbox_dfl_softmax * dfl_weights, axis=-1)  # (H, W, 4) = [left, top, right, bottom]
 
             # build grid offsets
@@ -298,6 +300,8 @@ class DetectorMixin:
             all_scores.append(scores)
 
         if not all_boxes:
+            if skipped_heads == len(outputs) and len(outputs) > 0:
+                raise ValueError(f"All {len(outputs)} output heads skipped: channel mismatch (expected {expected_channels})")
             return np.empty((0, 6), dtype=np.float32)
 
         all_boxes_arr = np.concatenate(all_boxes, axis=0)  # (N, 4)
