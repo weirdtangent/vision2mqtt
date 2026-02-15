@@ -247,6 +247,7 @@ class DetectorMixin:
         Handles multi-head output (e.g. 3 scales: 80x80, 40x40, 20x20) with either:
         - DFL bounding box regression (64 channels = 4 * 16 bins) + class scores (YOLO11: 144ch)
         - Direct bounding box regression (4 channels) + class scores (YOLO26: 84ch)
+        - Split bbox/class tensors at each scale (YOLO26 axmodel: pairs of 4ch + 80ch)
 
         The format is auto-detected from the channel count of each head.
         """
@@ -255,6 +256,33 @@ class DetectorMixin:
         # Accepted channel counts: DFL (4*16 + 80 = 144) or direct (4 + 80 = 84)
         dfl_channels = 4 * dfl_bins  # 64
         accepted_channels = {dfl_channels + num_classes, 4 + num_classes}  # {144, 84}
+
+        # Pre-process: merge split bbox/class heads.  Some axmodels (e.g. YOLO26)
+        # output separate (H,W,4) bbox and (H,W,80) class tensors at each scale
+        # instead of a single concatenated (H,W,84) tensor.  Detect this by
+        # checking the last dimension after stripping the batch dim — only values
+        # of exactly 4 or num_classes that are NOT already an accepted concatenated
+        # channel count trigger the merge.
+        split_candidates: dict[tuple[int, int], list[Any]] = {}
+        passthrough: list[Any] = []
+        for tensor in outputs:
+            t = tensor[0] if tensor.ndim == 4 else tensor
+            c = t.shape[-1]
+            if c in (4, num_classes) and c not in accepted_channels:
+                key = (t.shape[0], t.shape[1])
+                split_candidates.setdefault(key, []).append(t)
+            else:
+                passthrough.append(tensor)
+
+        # Rebuild outputs: concatenate valid bbox+class pairs, pass rest through
+        outputs = list(passthrough)
+        for _key, parts in split_candidates.items():
+            if len(parts) == 2 and {parts[0].shape[-1], parts[1].shape[-1]} == {4, num_classes}:
+                parts.sort(key=lambda p: p.shape[-1])  # bbox (4) first, then classes (num_classes)
+                outputs.append(np.concatenate(parts, axis=-1))
+            else:
+                for p in parts:
+                    outputs.append(p)
 
         all_boxes = []
         all_scores = []

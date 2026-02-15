@@ -366,6 +366,42 @@ class TestPostprocessYolo26:
         assert 0 in classes  # person from DFL head
         assert 2 in classes  # car from direct head
 
+    def test_split_bbox_class_heads(self):
+        """Separate (H,W,4) bbox and (H,W,80) class tensors are merged and decoded.
+
+        This matches the YOLO26 axmodel output format: 6 tensors (3 scales x 2).
+        """
+        # 3 scales: 8x8, 4x4, 2x2 — each with separate bbox and class tensors
+        bbox_8 = np.zeros((1, 8, 8, 4), dtype=np.float32)
+        cls_8 = np.full((1, 8, 8, 80), -20.0, dtype=np.float32)
+        bbox_4 = np.zeros((1, 4, 4, 4), dtype=np.float32)
+        cls_4 = np.full((1, 4, 4, 80), -20.0, dtype=np.float32)
+        bbox_2 = np.zeros((1, 2, 2, 4), dtype=np.float32)
+        cls_2 = np.full((1, 2, 2, 80), -20.0, dtype=np.float32)
+
+        # person detection at 8x8 scale, cell (1,1)
+        bbox_8[0, 1, 1, :] = [0.5, 0.5, 0.5, 0.5]
+        cls_8[0, 1, 1, 0] = 10.0  # class 0 (person)
+
+        # car detection at 2x2 scale, cell (0,0)
+        bbox_2[0, 0, 0, :] = [0.5, 0.5, 0.5, 0.5]
+        cls_2[0, 0, 0, 2] = 10.0  # class 2 (car)
+
+        outputs = [bbox_8, cls_8, bbox_4, cls_4, bbox_2, cls_2]
+        result = DetectorMixin._postprocess_yolo_raw(outputs, input_size=640, num_classes=80)
+        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        assert 0 in classes  # person
+        assert 2 in classes  # car
+
+    def test_split_heads_empty(self):
+        """Split bbox/class heads with no confident detections return empty."""
+        bbox = np.zeros((1, 4, 4, 4), dtype=np.float32)
+        cls = np.zeros((1, 4, 4, 80), dtype=np.float32)  # all logits=0 → sigmoid=0.5
+
+        result = DetectorMixin._postprocess_yolo_raw([bbox, cls], input_size=640, num_classes=80)
+        if len(result) > 0:
+            assert result[:, 4].max() <= 0.5
+
     def test_all_84ch_heads_skipped_raises(self):
         """Raises ValueError when all output heads have wrong channel count."""
         bad_head = np.zeros((1, 4, 4, 100), dtype=np.float32)  # 100 != 84 or 144
