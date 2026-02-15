@@ -15,6 +15,7 @@ services:
     # devices:
     #   - /dev/axcl_host:/dev/axcl_host
     #   - /dev/ax_mmb_dev:/dev/ax_mmb_dev
+    #   - /dev/msg_userdev:/dev/msg_userdev
     environment:
       - TZ=America/New_York
       # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)

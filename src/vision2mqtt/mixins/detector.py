@@ -142,6 +142,211 @@ class DetectorMixin:
                 )
         return objects
 
+    # COCO class names (80 classes) used by YOLO models
+    _COCO_NAMES: list[str] = [
+        "person",
+        "bicycle",
+        "car",
+        "motorcycle",
+        "airplane",
+        "bus",
+        "train",
+        "truck",
+        "boat",
+        "traffic light",
+        "fire hydrant",
+        "stop sign",
+        "parking meter",
+        "bench",
+        "bird",
+        "cat",
+        "dog",
+        "horse",
+        "sheep",
+        "cow",
+        "elephant",
+        "bear",
+        "zebra",
+        "giraffe",
+        "backpack",
+        "umbrella",
+        "handbag",
+        "tie",
+        "suitcase",
+        "frisbee",
+        "skis",
+        "snowboard",
+        "sports ball",
+        "kite",
+        "baseball bat",
+        "baseball glove",
+        "skateboard",
+        "surfboard",
+        "tennis racket",
+        "bottle",
+        "wine glass",
+        "cup",
+        "fork",
+        "knife",
+        "spoon",
+        "bowl",
+        "banana",
+        "apple",
+        "sandwich",
+        "orange",
+        "broccoli",
+        "carrot",
+        "hot dog",
+        "pizza",
+        "donut",
+        "cake",
+        "chair",
+        "couch",
+        "potted plant",
+        "bed",
+        "dining table",
+        "toilet",
+        "tv",
+        "laptop",
+        "mouse",
+        "remote",
+        "keyboard",
+        "cell phone",
+        "microwave",
+        "oven",
+        "toaster",
+        "sink",
+        "refrigerator",
+        "book",
+        "clock",
+        "vase",
+        "scissors",
+        "teddy bear",
+        "hair drier",
+        "toothbrush",
+    ]
+
+    # Pre-NMS confidence threshold to reduce box count before expensive NMS loop
+    _PRE_NMS_CONF: float = 0.25
+
+    @staticmethod
+    def _postprocess_yolo_raw(
+        outputs: list[Any],
+        input_size: int,
+        num_classes: int = 80,
+        dfl_bins: int = 16,
+        nms_iou: float = 0.45,
+        pre_nms_conf: float = _PRE_NMS_CONF,
+    ) -> Any:
+        """Decode raw YOLO feature maps into [x1, y1, x2, y2, conf, class_id] detections.
+
+        Handles multi-head output (e.g. 3 scales: 80x80, 40x40, 20x20) with
+        DFL bounding box regression (64 channels = 4 * 16 bins) + class scores.
+        """
+        import numpy as np
+
+        dfl_channels = 4 * dfl_bins  # 64
+        expected_channels = dfl_channels + num_classes  # 144
+
+        all_boxes = []
+        all_scores = []
+
+        # DFL weight vector for decoding: [0, 1, 2, ..., 15]
+        dfl_weights = np.arange(dfl_bins, dtype=np.float32)
+
+        skipped_heads = 0
+        for head in outputs:
+            # head shape: (1, H, W, C) or (1, C, H, W)
+            if head.ndim == 4:
+                head = head[0]  # remove batch dim -> (H, W, C) or (C, H, W)
+
+            # detect and handle CHW layout
+            if head.shape[0] == expected_channels and head.shape[0] != head.shape[-1]:
+                head = np.transpose(head, (1, 2, 0))  # CHW -> HWC
+
+            grid_h, grid_w, channels = head.shape
+            if channels != expected_channels:
+                skipped_heads += 1
+                continue
+
+            stride = input_size / grid_h
+
+            # split bbox DFL regs and class scores
+            bbox_raw = head[..., :dfl_channels]  # (H, W, 64)
+            cls_raw = head[..., dfl_channels:]  # (H, W, 80)
+
+            # numerically stable sigmoid for class scores
+            cls_scores = np.where(cls_raw >= 0, 1.0 / (1.0 + np.exp(-cls_raw)), np.exp(cls_raw) / (1.0 + np.exp(cls_raw)))
+
+            # decode DFL bbox: reshape to (H, W, 4, 16), softmax over bins, weighted sum
+            bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, dfl_bins)
+            bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
+            bbox_dfl_softmax = bbox_dfl_exp / (np.sum(bbox_dfl_exp, axis=-1, keepdims=True) + 1e-9)
+            bbox_decoded = np.sum(bbox_dfl_softmax * dfl_weights, axis=-1)  # (H, W, 4) = [left, top, right, bottom]
+
+            # build grid offsets
+            gy, gx = np.meshgrid(np.arange(grid_h, dtype=np.float32), np.arange(grid_w, dtype=np.float32), indexing="ij")
+
+            # convert dist-from-center to absolute coords in input space
+            x1 = (gx + 0.5 - bbox_decoded[..., 0]) * stride
+            y1 = (gy + 0.5 - bbox_decoded[..., 1]) * stride
+            x2 = (gx + 0.5 + bbox_decoded[..., 2]) * stride
+            y2 = (gy + 0.5 + bbox_decoded[..., 3]) * stride
+
+            boxes = np.stack([x1, y1, x2, y2], axis=-1).reshape(-1, 4)  # (H*W, 4)
+            scores = cls_scores.reshape(-1, num_classes)  # (H*W, 80)
+
+            all_boxes.append(boxes)
+            all_scores.append(scores)
+
+        if not all_boxes:
+            if skipped_heads == len(outputs) and len(outputs) > 0:
+                raise ValueError(f"All {len(outputs)} output heads skipped: channel mismatch (expected {expected_channels})")
+            return np.empty((0, 6), dtype=np.float32)
+
+        all_boxes_arr = np.concatenate(all_boxes, axis=0)  # (N, 4)
+        all_scores_arr = np.concatenate(all_scores, axis=0)  # (N, 80)
+
+        # per-cell best class
+        cls_ids = np.argmax(all_scores_arr, axis=1)  # (N,)
+        confs = all_scores_arr[np.arange(len(cls_ids)), cls_ids]  # (N,)
+
+        # pre-NMS confidence filter to reduce box count
+        conf_mask = confs >= pre_nms_conf
+        if not np.any(conf_mask):
+            return np.empty((0, 6), dtype=np.float32)
+        all_boxes_arr = all_boxes_arr[conf_mask]
+        cls_ids = cls_ids[conf_mask]
+        confs = confs[conf_mask]
+
+        # greedy NMS (class-agnostic)
+        order = np.argsort(-confs)
+        keep: list[int] = []
+        suppressed = np.zeros(len(order), dtype=bool)
+        for i in range(len(order)):
+            idx = order[i]
+            if suppressed[i]:
+                continue
+            keep.append(idx)
+            # compute IoU with remaining
+            xx1 = np.maximum(all_boxes_arr[idx, 0], all_boxes_arr[order[i + 1 :], 0])
+            yy1 = np.maximum(all_boxes_arr[idx, 1], all_boxes_arr[order[i + 1 :], 1])
+            xx2 = np.minimum(all_boxes_arr[idx, 2], all_boxes_arr[order[i + 1 :], 2])
+            yy2 = np.minimum(all_boxes_arr[idx, 3], all_boxes_arr[order[i + 1 :], 3])
+            inter = np.maximum(0, xx2 - xx1) * np.maximum(0, yy2 - yy1)
+            area_a = (all_boxes_arr[idx, 2] - all_boxes_arr[idx, 0]) * (all_boxes_arr[idx, 3] - all_boxes_arr[idx, 1])
+            area_b = (all_boxes_arr[order[i + 1 :], 2] - all_boxes_arr[order[i + 1 :], 0]) * (
+                all_boxes_arr[order[i + 1 :], 3] - all_boxes_arr[order[i + 1 :], 1]
+            )
+            iou = inter / (area_a + area_b - inter + 1e-6)
+            suppressed[i + 1 :] |= iou > nms_iou
+
+        if not keep:
+            return np.empty((0, 6), dtype=np.float32)
+
+        keep_arr = np.array(keep)
+        return np.column_stack([all_boxes_arr[keep_arr], confs[keep_arr], cls_ids[keep_arr].astype(np.float32)])  # (K, 6)
+
     def _detect_axcl(self: Vision2Mqtt, image_b64: str) -> list[DetectedObject]:
         import numpy as np
         from PIL import Image
@@ -169,125 +374,36 @@ class DetectorMixin:
         # run inference
         outputs = self._detector_model.run(None, {self._axcl_input_name: input_data})
 
-        # parse YOLO output (standard format: [batch, num_detections, 6] or similar)
-        # The exact output format depends on the .axmodel export
-        # Common: each detection = [x1, y1, x2, y2, confidence, class_id]
+        # postprocess raw YOLO feature maps into detections
+        detections = DetectorMixin._postprocess_yolo_raw(outputs, input_size)
+
+        coco_names = DetectorMixin._COCO_NAMES
         objects = []
-        if outputs and len(outputs) > 0:
-            detections = outputs[0]
-            if hasattr(detections, "shape") and len(detections.shape) == 3:
-                detections = detections[0]  # remove batch dim
+        for det in detections:
+            x1, y1, x2, y2, conf, cls_id = det
+            conf = float(conf)
+            cls_id = int(cls_id)
 
-            # COCO class names (80 classes)
-            coco_names = [
-                "person",
-                "bicycle",
-                "car",
-                "motorcycle",
-                "airplane",
-                "bus",
-                "train",
-                "truck",
-                "boat",
-                "traffic light",
-                "fire hydrant",
-                "stop sign",
-                "parking meter",
-                "bench",
-                "bird",
-                "cat",
-                "dog",
-                "horse",
-                "sheep",
-                "cow",
-                "elephant",
-                "bear",
-                "zebra",
-                "giraffe",
-                "backpack",
-                "umbrella",
-                "handbag",
-                "tie",
-                "suitcase",
-                "frisbee",
-                "skis",
-                "snowboard",
-                "sports ball",
-                "kite",
-                "baseball bat",
-                "baseball glove",
-                "skateboard",
-                "surfboard",
-                "tennis racket",
-                "bottle",
-                "wine glass",
-                "cup",
-                "fork",
-                "knife",
-                "spoon",
-                "bowl",
-                "banana",
-                "apple",
-                "sandwich",
-                "orange",
-                "broccoli",
-                "carrot",
-                "hot dog",
-                "pizza",
-                "donut",
-                "cake",
-                "chair",
-                "couch",
-                "potted plant",
-                "bed",
-                "dining table",
-                "toilet",
-                "tv",
-                "laptop",
-                "mouse",
-                "remote",
-                "keyboard",
-                "cell phone",
-                "microwave",
-                "oven",
-                "toaster",
-                "sink",
-                "refrigerator",
-                "book",
-                "clock",
-                "vase",
-                "scissors",
-                "teddy bear",
-                "hair drier",
-                "toothbrush",
-            ]
+            if cls_id < 0 or cls_id >= len(coco_names):
+                continue
 
-            for det in detections:
-                if len(det) >= 6:
-                    x1, y1, x2, y2, conf, cls_id = det[:6]
-                    conf = float(conf)
-                    cls_id = int(cls_id)
+            raw_label = coco_names[cls_id]
 
-                    if cls_id < 0 or cls_id >= len(coco_names):
-                        continue
+            # undo letterbox: map back to original image coords, then normalize
+            x1 = (float(x1) - pad_x) / scale / img_w
+            y1 = (float(y1) - pad_y) / scale / img_h
+            x2 = (float(x2) - pad_x) / scale / img_w
+            y2 = (float(y2) - pad_y) / scale / img_h
 
-                    raw_label = coco_names[cls_id]
+            bbox = [round(max(0, x1), 4), round(max(0, y1), 4), round(min(1, x2), 4), round(min(1, y2), 4)]
 
-                    # undo letterbox: map back to original image coords, then normalize
-                    x1 = (float(x1) - pad_x) / scale / img_w
-                    y1 = (float(y1) - pad_y) / scale / img_h
-                    x2 = (float(x2) - pad_x) / scale / img_w
-                    y2 = (float(y2) - pad_y) / scale / img_h
-
-                    bbox = [round(max(0, x1), 4), round(max(0, y1), 4), round(min(1, x2), 4), round(min(1, y2), 4)]
-
-                    objects.append(
-                        DetectedObject(
-                            label=raw_label,
-                            raw_label=raw_label,
-                            confidence=conf,
-                            bbox=bbox,
-                        )
-                    )
+            objects.append(
+                DetectedObject(
+                    label=raw_label,
+                    raw_label=raw_label,
+                    confidence=conf,
+                    bbox=bbox,
+                )
+            )
 
         return objects
