@@ -224,7 +224,7 @@ class TestCameraState:
 
         with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
             mock_asyncio.to_thread = _fake_to_thread
-            await pub.publish_camera_state("cam1", 3, 12.345, "2026-02-14T15:30:45")
+            await pub.publish_camera_state("cam1", 3, 12.345)
 
         topics = [c.args[0] for c in pub.mqtt_helper.safe_publish.call_args_list]
         assert "vision2mqtt/cam1/sensor/object_count" in topics
@@ -234,6 +234,8 @@ class TestCameraState:
         for c in pub.mqtt_helper.safe_publish.call_args_list:
             if c.args[0] == "vision2mqtt/cam1/sensor/object_count":
                 assert c.args[1] == "3"
+            elif c.args[0] == "vision2mqtt/cam1/sensor/last_detection":
+                assert "T" in c.args[1]  # ISO 8601 format
             elif c.args[0] == "vision2mqtt/cam1/sensor/processing_time":
                 assert c.args[1] == "12.3"
 
@@ -243,6 +245,6 @@ class TestCameraState:
 
         with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
             mock_asyncio.to_thread = _fake_to_thread
-            await pub.publish_camera_state("cam1", 3, 12.345, "2026-02-14T15:30:45")
+            await pub.publish_camera_state("cam1", 3, 12.345)
 
         pub.mqtt_helper.safe_publish.assert_not_called()

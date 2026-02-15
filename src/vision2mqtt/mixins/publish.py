@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from vision2mqtt.models.events import MotionEvent, VisionResult
@@ -139,13 +140,14 @@ class PublishMixin:
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
         self.logger.info(f"published HA camera discovery for '{camera_name}' ({camera_id})")
 
-    async def publish_camera_state(self: Vision2Mqtt, camera_id: str, object_count: int, processing_time_ms: float, timestamp: str) -> None:
+    async def publish_camera_state(self: Vision2Mqtt, camera_id: str, object_count: int, processing_time_ms: float) -> None:
         if not self.ha_enabled:
             return
 
         prefix = self.service
+        now_iso = datetime.now(timezone.utc).isoformat()
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/object_count", str(object_count))
-        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/last_detection", timestamp)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/last_detection", now_iso)
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/processing_time", str(round(processing_time_ms, 1)))
 
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
@@ -202,6 +204,6 @@ class PublishMixin:
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
 
         # publish camera sensor state for HA
-        await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms, event.timestamp)
+        await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms)
 
         self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): " f"{len(result.objects)} objects, {result.processing_time_ms}ms")
