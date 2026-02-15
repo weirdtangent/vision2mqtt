@@ -1,3 +1,16 @@
+# [0.3.0](https://github.com/weirdtangent/vision2mqtt/compare/v0.2.2...v0.3.0) (2026-02-15)
+
+
+### Bug Fixes
+
+* decode raw YOLO feature maps from axmodel output ([055dd14](https://github.com/weirdtangent/vision2mqtt/commit/055dd1458b4e8e12ca99b19bf2a13a628c18c9ef))
+* only trigger Claude review on [@claude](https://github.com/claude) mention ([a801c20](https://github.com/weirdtangent/vision2mqtt/commit/a801c207dbb04e1ffe478f738ac0ccd62d3f71ea))
+
+
+### Features
+
+* upgrade Claude review with auto-PR review and GitHub App token ([a9ce4af](https://github.com/weirdtangent/vision2mqtt/commit/a9ce4afec87ad00bb764984bb81ef7a2dd448478))
+
 ## [0.2.2](https://github.com/weirdtangent/vision2mqtt/compare/v0.2.1...v0.2.2) (2026-02-15)
 
 
