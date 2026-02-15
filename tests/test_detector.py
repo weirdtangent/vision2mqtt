@@ -292,3 +292,65 @@ class TestAxclBackend:
             result = await detector.detect_objects(event)
 
         assert len(result.objects) == 0
+
+
+class TestPostprocessYolo26:
+    """Tests for YOLO26 direct regression (84-channel) postprocessing."""
+
+    def test_single_detection_direct_regression(self):
+        """84-channel head (4 direct bbox + 80 classes) should decode without DFL."""
+        # 2x2 grid, 84 channels (4 bbox + 80 classes), stride = 640/2 = 320
+        head = np.zeros((1, 2, 2, 84), dtype=np.float32)
+        # place a detection at grid cell (0, 0): set class 0 (person) logit high
+        head[0, 0, 0, 4] = 10.0  # sigmoid(10) ≈ 1.0 for class 0
+        # direct bbox: [left, top, right, bottom] distances from cell center
+        head[0, 0, 0, 0] = 0.5  # left
+        head[0, 0, 0, 1] = 0.5  # top
+        head[0, 0, 0, 2] = 0.5  # right
+        head[0, 0, 0, 3] = 0.5  # bottom
+
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80)
+        assert result.shape[1] == 6
+        assert len(result) >= 1
+        assert int(result[0, 5]) == 0  # class 0 (person)
+        assert result[0, 4] > 0.9  # high confidence
+
+    def test_empty_output_direct(self):
+        """All-zero 84-channel feature maps should produce no confident detections."""
+        head = np.zeros((1, 2, 2, 84), dtype=np.float32)
+        result = DetectorMixin._postprocess_yolo_raw([head], input_size=640, num_classes=80)
+        if len(result) > 0:
+            assert result[:, 4].max() <= 0.5
+
+    def test_chw_layout_direct(self):
+        """CHW layout with 84 channels should be handled correctly."""
+        head_hwc = np.zeros((1, 4, 4, 84), dtype=np.float32)
+        head_hwc[0, 0, 0, 4] = 10.0  # class 0 logit
+        head_hwc[0, 0, 0, 0:4] = 0.5  # bbox
+
+        head_chw = np.transpose(head_hwc, (0, 3, 1, 2))
+        assert head_chw.shape == (1, 84, 4, 4)
+
+        result = DetectorMixin._postprocess_yolo_raw([head_chw], input_size=640, num_classes=80)
+        assert len(result) >= 1
+        assert int(result[0, 5]) == 0
+
+    def test_multi_head_direct(self):
+        """Multiple 84-channel heads are concatenated before NMS."""
+        head1 = np.zeros((1, 4, 4, 84), dtype=np.float32)
+        head2 = np.zeros((1, 2, 2, 84), dtype=np.float32)
+        head1[0, 0, 0, 4] = 10.0  # class 0 (person)
+        head1[0, 0, 0, 0:4] = 0.5
+        head2[0, 1, 1, 6] = 10.0  # class 2 (car)
+        head2[0, 1, 1, 0:4] = 0.5
+
+        result = DetectorMixin._postprocess_yolo_raw([head1, head2], input_size=640, num_classes=80)
+        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        assert 0 in classes  # person from head1
+        assert 2 in classes  # car from head2
+
+    def test_all_84ch_heads_skipped_raises(self):
+        """Raises ValueError when all output heads have wrong channel count."""
+        bad_head = np.zeros((1, 4, 4, 100), dtype=np.float32)  # 100 != 84 or 144
+        with pytest.raises(ValueError, match="channel mismatch"):
+            DetectorMixin._postprocess_yolo_raw([bad_head], input_size=640, num_classes=80)

@@ -23,7 +23,7 @@ While using a config.yaml file is the recommended approach, vision2mqtt also sup
 ## Vision Settings
 
 - `VISION_BACKEND` (optional, default = 'ultralytics') - detection backend: 'ultralytics' or 'axcl'
-- `VISION_MODEL` (optional, default = 'yolo11n.pt') - model path (.axmodel) or model name (.pt)
+- `VISION_MODEL` (optional, default = 'yolo26n.pt') - model path (.axmodel) or model name (.pt)
 - `VISION_MIN_CONFIDENCE` (optional, default = 0.45) - minimum confidence threshold for detections
 - `VISION_CONCURRENCY` (optional, default = 1) - number of worker tasks processing the queue
 - `VISION_MAX_QUEUE` (optional, default = 20) - maximum queued vision requests (oldest dropped when full)

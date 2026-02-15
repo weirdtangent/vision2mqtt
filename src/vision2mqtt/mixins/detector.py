@@ -244,13 +244,17 @@ class DetectorMixin:
     ) -> Any:
         """Decode raw YOLO feature maps into [x1, y1, x2, y2, conf, class_id] detections.
 
-        Handles multi-head output (e.g. 3 scales: 80x80, 40x40, 20x20) with
-        DFL bounding box regression (64 channels = 4 * 16 bins) + class scores.
+        Handles multi-head output (e.g. 3 scales: 80x80, 40x40, 20x20) with either:
+        - DFL bounding box regression (64 channels = 4 * 16 bins) + class scores (YOLO11: 144ch)
+        - Direct bounding box regression (4 channels) + class scores (YOLO26: 84ch)
+
+        The format is auto-detected from the channel count of each head.
         """
         import numpy as np
 
+        # Accepted channel counts: DFL (4*16 + 80 = 144) or direct (4 + 80 = 84)
         dfl_channels = 4 * dfl_bins  # 64
-        expected_channels = dfl_channels + num_classes  # 144
+        accepted_channels = {dfl_channels + num_classes, 4 + num_classes}  # {144, 84}
 
         all_boxes = []
         all_scores = []
@@ -265,28 +269,36 @@ class DetectorMixin:
                 head = head[0]  # remove batch dim -> (H, W, C) or (C, H, W)
 
             # detect and handle CHW layout
-            if head.shape[0] == expected_channels and head.shape[0] != head.shape[-1]:
+            if head.shape[0] in accepted_channels and head.shape[0] != head.shape[-1]:
                 head = np.transpose(head, (1, 2, 0))  # CHW -> HWC
 
             grid_h, grid_w, channels = head.shape
-            if channels != expected_channels:
+            if channels not in accepted_channels:
                 skipped_heads += 1
                 continue
 
+            # derive actual bbox channels and DFL bin count from this head
+            head_bbox_channels = channels - num_classes  # 64 (DFL) or 4 (direct)
+            head_dfl_bins = head_bbox_channels // 4  # 16 or 1
+
             stride = input_size / grid_h
 
-            # split bbox DFL regs and class scores
-            bbox_raw = head[..., :dfl_channels]  # (H, W, 64)
-            cls_raw = head[..., dfl_channels:]  # (H, W, 80)
+            # split bbox regs and class scores
+            bbox_raw = head[..., :head_bbox_channels]
+            cls_raw = head[..., head_bbox_channels:]  # (H, W, 80)
 
             # numerically stable sigmoid for class scores
             cls_scores = np.where(cls_raw >= 0, 1.0 / (1.0 + np.exp(-cls_raw)), np.exp(cls_raw) / (1.0 + np.exp(cls_raw)))
 
-            # decode DFL bbox: reshape to (H, W, 4, 16), softmax over bins, weighted sum
-            bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, dfl_bins)
-            bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
-            bbox_dfl_softmax = bbox_dfl_exp / (np.sum(bbox_dfl_exp, axis=-1, keepdims=True) + 1e-9)
-            bbox_decoded = np.sum(bbox_dfl_softmax * dfl_weights, axis=-1)  # (H, W, 4) = [left, top, right, bottom]
+            if head_dfl_bins > 1:
+                # DFL decode (YOLO11): reshape to (H, W, 4, 16), softmax over bins, weighted sum
+                bbox_dfl = bbox_raw.reshape(grid_h, grid_w, 4, head_dfl_bins)
+                bbox_dfl_exp = np.exp(bbox_dfl - np.max(bbox_dfl, axis=-1, keepdims=True))
+                bbox_dfl_softmax = bbox_dfl_exp / (np.sum(bbox_dfl_exp, axis=-1, keepdims=True) + 1e-9)
+                bbox_decoded = np.sum(bbox_dfl_softmax * dfl_weights, axis=-1)  # (H, W, 4)
+            else:
+                # Direct regression (YOLO26): 4 channels are raw distance values
+                bbox_decoded = bbox_raw.reshape(grid_h, grid_w, 4)
 
             # build grid offsets
             gy, gx = np.meshgrid(np.arange(grid_h, dtype=np.float32), np.arange(grid_w, dtype=np.float32), indexing="ij")
@@ -305,7 +317,7 @@ class DetectorMixin:
 
         if not all_boxes:
             if skipped_heads == len(outputs) and len(outputs) > 0:
-                raise ValueError(f"All {len(outputs)} output heads skipped: channel mismatch (expected {expected_channels})")
+                raise ValueError(f"All {len(outputs)} output heads skipped: channel mismatch (expected one of {sorted(accepted_channels)})")
             return np.empty((0, 6), dtype=np.float32)
 
         all_boxes_arr = np.concatenate(all_boxes, axis=0)  # (N, 4)

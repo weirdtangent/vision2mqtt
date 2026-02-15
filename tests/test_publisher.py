@@ -119,7 +119,7 @@ class TestPublishVisionResult:
     async def test_parent_presence_activated_by_specific_label(self):
         config = {
             "backend": "ultralytics",
-            "model": "yolo11n.pt",
+            "model": "yolo26n.pt",
             "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "car", "vehicle", "animal", "bird"],
             "min_confidence": 0.45,
@@ -158,7 +158,7 @@ class TestPublishVisionResult:
     async def test_composite_presence_published(self):
         config = {
             "backend": "ultralytics",
-            "model": "yolo11n.pt",
+            "model": "yolo26n.pt",
             "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "vehicle", "animal", "bird"],
             "min_confidence": 0.45,
@@ -328,7 +328,7 @@ class TestCameraDiscovery:
     async def test_camera_discovery_includes_composites(self):
         config = {
             "backend": "ultralytics",
-            "model": "yolo11n.pt",
+            "model": "yolo26n.pt",
             "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "vehicle", "animal", "bird"],
             "min_confidence": 0.45,

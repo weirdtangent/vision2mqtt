@@ -26,7 +26,7 @@ mqtt:
 
 vision:
   backend: ultralytics
-  model: yolo11n.pt
+  model: yolo26n.pt
   labels:
     - person
     - vehicle
@@ -51,7 +51,7 @@ vision:
         assert config["mqtt"]["username"] == "mqtt"
         assert config["mqtt"]["prefix"] == "vision2mqtt"
         assert config["vision"]["backend"] == "ultralytics"
-        assert config["vision"]["model"] == "yolo11n.pt"
+        assert config["vision"]["model"] == "yolo26n.pt"
         assert config["vision"]["labels"] == ["person", "vehicle"]
         assert config["vision"]["min_confidence"] == 0.5
         assert config["vision"]["concurrency"] == 2
@@ -103,7 +103,7 @@ class TestLoadConfigDefaults:
         assert config["mqtt"]["protocol_version"] == "5"
         assert config["mqtt"]["prefix"] == "vision2mqtt"
         assert config["vision"]["backend"] == "ultralytics"
-        assert config["vision"]["model"] == "yolo11n.pt"
+        assert config["vision"]["model"] == "yolo26n.pt"
         assert config["vision"]["subscribe_topics"] == ["+/vision/request"]
         assert config["vision"]["labels"] == ["person", "vehicle", "animal", "bird"]
         assert config["vision"]["min_confidence"] == 0.45
@@ -168,7 +168,7 @@ mqtt:
   host: localhost
 vision:
   backend: axcl
-  model: /models/yolo11s.axmodel
+  model: /models/yolo26s.axmodel
 """)
         version_file = tmp_path / "VERSION"
         version_file.write_text("v0.1.0")
@@ -182,7 +182,7 @@ vision:
             os.chdir(old_cwd)
 
         assert config["vision"]["backend"] == "axcl"
-        assert config["vision"]["model"] == "/models/yolo11s.axmodel"
+        assert config["vision"]["model"] == "/models/yolo26s.axmodel"
 
     def test_malformed_yaml_raises(self, tmp_path):
         config_file = tmp_path / "config.yaml"

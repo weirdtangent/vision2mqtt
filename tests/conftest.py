@@ -7,7 +7,7 @@ import pytest
 def sample_vision_config():
     return {
         "backend": "ultralytics",
-        "model": "yolo11n.pt",
+        "model": "yolo26n.pt",
         "subscribe_topics": ["+/vision/request"],
         "labels": ["person", "vehicle", "animal", "bird"],
         "min_confidence": 0.45,

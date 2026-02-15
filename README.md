@@ -1,7 +1,7 @@
 # weirdtangent/vision2mqtt
 
 YOLO object detection service for MQTT camera events — subscribes to motion event
-images from camera bridges, runs inference via [YOLO11](https://docs.ultralytics.com/models/yolo11/),
+images from camera bridges, runs inference via [YOLO26](https://docs.ultralytics.com/models/yolo26/),
 and publishes detection results back to MQTT.
 
 [![Deploy Status](https://github.com/weirdtangent/vision2mqtt/actions/workflows/deploy.yaml/badge.svg)](https://github.com/weirdtangent/vision2mqtt/actions/workflows/deploy.yaml)
@@ -18,7 +18,7 @@ Camera bridges (Synology)              vision2mqtt (Raspberry Pi 5 + LLM-8850)
 │amcrest2mqtt │──vision/request──┐     │ subscribe to        │
 │blink2mqtt   │──vision/request──┼────►│ +/vision/request    │
 └─────────────┘                  │     │                     │
-                              MQTT     │ YOLO11 inference    │
+                              MQTT     │ YOLO26 inference    │
                             (Mosquitto)│ (AX8850 NPU or CPU) │
                                  │     │                     │
                                  │◄────│ publish results     │
@@ -26,7 +26,7 @@ Camera bridges (Synology)              vision2mqtt (Raspberry Pi 5 + LLM-8850)
 ```
 
 1. Camera bridges detect motion and publish a JSON message with a base64-encoded image
-2. vision2mqtt picks up the message, decodes the image, runs YOLO11 object detection
+2. vision2mqtt picks up the message, decodes the image, runs YOLO26 object detection
 3. Results (detected objects, summary, optional presence) are published back to MQTT
 
 ## Detection Backends
@@ -76,7 +76,7 @@ mqtt:
 ```yaml
 vision:
   backend: ultralytics         # "axcl" for AX8850 NPU, "ultralytics" for CPU
-  model: yolo11n.pt            # model path (.axmodel) or name (.pt)
+  model: yolo26n.pt            # model path (.axmodel) or name (.pt)
   subscribe_topics:
     - "+/vision/request"
   labels:
@@ -206,12 +206,12 @@ docker --version          # should show Docker CE
 ```bash
 mkdir -p ~/vision2mqtt/config ~/vision2mqtt/models
 
-# Download YOLO11s model
-wget https://huggingface.co/AXERA-TECH/YOLO11/resolve/main/ax650/yolo11s.axmodel \
+# Download YOLO26s model
+wget https://huggingface.co/AXERA-TECH/yolo26/resolve/main/ax650/yolo26s.axmodel \
   -P ~/vision2mqtt/models/
 ```
 
-Create `config/config.yaml` with `backend: axcl` and `model: /models/yolo11s.axmodel` (see [config.yaml.sample](config.yaml.sample)).
+Create `config/config.yaml` with `backend: axcl` and `model: /models/yolo26s.axmodel` (see [config.yaml.sample](config.yaml.sample)).
 
 For the Pi 5 with LLM-8850, the `docker-compose.yaml` needs NPU device passthrough:
 ```yaml
