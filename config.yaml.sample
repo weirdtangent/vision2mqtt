@@ -36,5 +36,6 @@ vision:
     - group                      # 2+ people detected
     - dog_walker                 # person + dog
     - cyclist                    # person + bicycle
-    - package_carrier            # person + backpack/suitcase/handbag
+    - student                    # person + backpack
+    - package_carrier            # person + suitcase/handbag
   debug_save_images: false        # save annotated images to /tmp for debugging

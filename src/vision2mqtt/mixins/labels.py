@@ -65,6 +65,7 @@ LABEL_ICONS: dict[str, str] = {
     "dog_walker": "mdi:dog-service",
     "group": "mdi:account-group",
     "cyclist": "mdi:bike",
+    "student": "mdi:school",
     "package_carrier": "mdi:package-variant-closed",
 }
 
