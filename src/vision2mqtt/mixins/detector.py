@@ -36,12 +36,42 @@ class DetectorMixin:
         model = YOLO(model_path)
         return model
 
-    def _load_axcl_model(self: Vision2Mqtt, model_path: str) -> Any:
-        import axcl
+    @staticmethod
+    def _resolve_input_layout(input_shape: list[Any]) -> tuple[int, bool]:
+        """Derive the square spatial input size and layout from a model input shape.
 
-        axcl.setup(0)
-        model = axcl.InferenceSession(model_path)
-        return model
+        Handles NHWC [1, H, W, 3] and NCHW [1, 3, H, W] layouts.
+        Returns (spatial_size, is_nchw).
+        Raises ValueError if the spatial size cannot be determined.
+        """
+        if len(input_shape) == 4:
+            _, d1, d2, d3 = input_shape
+            # NHWC: last dim is channels (1 or 3)
+            if isinstance(d3, int) and d3 in (1, 3) and isinstance(d1, int) and isinstance(d2, int):
+                h, w, nchw = d1, d2, False
+            # NCHW: second dim is channels (1 or 3)
+            elif isinstance(d1, int) and d1 in (1, 3) and isinstance(d2, int) and isinstance(d3, int):
+                h, w, nchw = d2, d3, True
+            else:
+                raise ValueError(f"Unable to determine spatial dimensions from shape {input_shape!r}")
+            if h != w:
+                raise ValueError(f"Expected square spatial dimensions but got H={h}, W={w} from shape {input_shape!r}")
+            return h, nchw
+        raise ValueError(f"Expected 4D input shape but got {input_shape!r}")
+
+    def _load_axcl_model(self: Vision2Mqtt, model_path: str) -> Any:
+        import axengine
+
+        session = axengine.InferenceSession(model_path)
+
+        # cache input metadata to avoid per-frame overhead
+        input_info = session.get_inputs()[0]
+        self._axcl_input_name: str = input_info.name
+        self._axcl_input_size: int
+        self._axcl_nchw: bool
+        self._axcl_input_size, self._axcl_nchw = DetectorMixin._resolve_input_layout(list(input_info.shape))
+
+        return session
 
     async def detect_objects(self: Vision2Mqtt, event: MotionEvent) -> VisionResult:
         backend = self.vision_config["backend"]
@@ -120,8 +150,9 @@ class DetectorMixin:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         img_w, img_h = image.size
 
-        # resize with letterbox to 640x640
-        input_size = 640
+        input_size = self._axcl_input_size
+
+        # resize with letterbox
         scale = min(input_size / img_w, input_size / img_h)
         new_w, new_h = int(img_w * scale), int(img_h * scale)
         resized = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
@@ -131,10 +162,12 @@ class DetectorMixin:
         pad_y = (input_size - new_h) // 2
         padded.paste(resized, (pad_x, pad_y))
 
-        input_data = np.array(padded, dtype=np.uint8)
+        input_data = np.array(padded, dtype=np.uint8)[np.newaxis, ...]  # NHWC (1, H, W, 3)
+        if self._axcl_nchw:
+            input_data = np.transpose(input_data, (0, 3, 1, 2))  # NHWC -> NCHW
 
         # run inference
-        outputs = self._detector_model.run([input_data])
+        outputs = self._detector_model.run(None, {self._axcl_input_name: input_data})
 
         # parse YOLO output (standard format: [batch, num_detections, 6] or similar)
         # The exact output format depends on the .axmodel export

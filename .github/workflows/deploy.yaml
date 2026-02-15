@@ -192,7 +192,7 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ env.VERSION }}
-            ENABLE_PYAXCL=true
+            ENABLE_NPU=true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/arm64,linux/amd64

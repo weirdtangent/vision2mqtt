@@ -49,16 +49,17 @@ COPY . .
 # 5. Install the app itself (pretend version visible, no deps)
 RUN SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION} uv pip install --no-cache-dir . --no-deps
 
-# 6. Install pyaxcl for AX8850 NPU support (optional, pure-python wheel from AXERA-TECH)
-ARG ENABLE_PYAXCL=false
-ARG PYAXCL_VERSION=3.10.2-1
-RUN if [ "${ENABLE_PYAXCL}" = "true" ]; then \
-        echo "Installing pyaxcl v${PYAXCL_VERSION} for AX8850 NPU support..."; \
+# 6. Install axengine for AX8850 NPU support (optional, pure-python wheel from AXERA-TECH)
+ARG ENABLE_NPU=false
+ARG AXENGINE_TAG=0.1.3.rc2
+ARG AXENGINE_WHEEL=axengine-0.1.3-py3-none-any.whl
+RUN if [ "${ENABLE_NPU}" = "true" ]; then \
+        echo "Installing axengine (tag=${AXENGINE_TAG}) for AX8850 NPU support..."; \
         uv pip install --no-cache-dir \
-            "https://github.com/AXERA-TECH/pyaxcl/releases/download/v${PYAXCL_VERSION}/pyaxcl-${PYAXCL_VERSION%-*}-py3-none-any.whl" \
-        || { echo >&2 "ERROR: Failed to install pyaxcl v${PYAXCL_VERSION} while ENABLE_PYAXCL=true."; exit 1; }; \
+            "https://github.com/AXERA-TECH/pyaxengine/releases/download/${AXENGINE_TAG}/${AXENGINE_WHEEL}" \
+        || { echo >&2 "ERROR: Failed to install axengine while ENABLE_NPU=true."; exit 1; }; \
     else \
-        echo "Skipping pyaxcl installation (ENABLE_PYAXCL=${ENABLE_PYAXCL})."; \
+        echo "Skipping axengine installation (ENABLE_NPU=${ENABLE_NPU})."; \
     fi
 
 # 7. Cleanup
