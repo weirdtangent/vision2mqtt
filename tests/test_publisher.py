@@ -118,10 +118,16 @@ class TestPublishVisionResult:
     @pytest.mark.asyncio
     async def test_parent_presence_activated_by_specific_label(self):
         config = {
-            "backend": "ultralytics", "model": "yolo11n.pt", "subscribe_topics": ["+/vision/request"],
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "car", "vehicle", "animal", "bird"],
-            "min_confidence": 0.45, "concurrency": 1, "max_queue": 20,
-            "retain_presence": True, "debug_save_images": False, "composites": [],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
         }
         pub = FakePublisher(config)
 
@@ -151,10 +157,15 @@ class TestPublishVisionResult:
     @pytest.mark.asyncio
     async def test_composite_presence_published(self):
         config = {
-            "backend": "ultralytics", "model": "yolo11n.pt", "subscribe_topics": ["+/vision/request"],
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "vehicle", "animal", "bird"],
-            "min_confidence": 0.45, "concurrency": 1, "max_queue": 20,
-            "retain_presence": True, "debug_save_images": False,
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
             "composites": ["group"],
         }
         pub = FakePublisher(config)
@@ -316,10 +327,15 @@ class TestCameraDiscovery:
     @pytest.mark.asyncio
     async def test_camera_discovery_includes_composites(self):
         config = {
-            "backend": "ultralytics", "model": "yolo11n.pt", "subscribe_topics": ["+/vision/request"],
+            "backend": "ultralytics",
+            "model": "yolo11n.pt",
+            "subscribe_topics": ["+/vision/request"],
             "labels": ["person", "vehicle", "animal", "bird"],
-            "min_confidence": 0.45, "concurrency": 1, "max_queue": 20,
-            "retain_presence": False, "debug_save_images": False,
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": False,
+            "debug_save_images": False,
             "composites": ["dog_walker", "group"],
         }
         pub = FakePublisher(config, ha_enabled=True)

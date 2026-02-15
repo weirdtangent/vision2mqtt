@@ -36,27 +36,33 @@ class TestBboxGap:
 class TestDogWalker:
     def test_person_near_dog(self):
         fc = FakeComposites(["dog_walker"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.1, 0.1, 0.3, 0.8]),
-            _det("dog", [0.3, 0.5, 0.5, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.1, 0.1, 0.3, 0.8]),
+                _det("dog", [0.3, 0.5, 0.5, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["dog_walker"] is True
 
     def test_person_far_from_dog(self):
         fc = FakeComposites(["dog_walker"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.0, 0.0, 0.1, 0.3]),
-            _det("dog", [0.7, 0.7, 0.9, 0.9]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.0, 0.0, 0.1, 0.3]),
+                _det("dog", [0.7, 0.7, 0.9, 0.9]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["dog_walker"] is False
 
     def test_no_dog(self):
         fc = FakeComposites(["dog_walker"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.1, 0.1, 0.3, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.1, 0.1, 0.3, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["dog_walker"] is False
 
@@ -64,18 +70,22 @@ class TestDogWalker:
 class TestGroup:
     def test_two_people(self):
         fc = FakeComposites(["group"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.1, 0.1, 0.3, 0.8]),
-            _det("person", [0.4, 0.1, 0.6, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.1, 0.1, 0.3, 0.8]),
+                _det("person", [0.4, 0.1, 0.6, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["group"] is True
 
     def test_single_person(self):
         fc = FakeComposites(["group"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.1, 0.1, 0.3, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.1, 0.1, 0.3, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["group"] is False
 
@@ -89,19 +99,23 @@ class TestGroup:
 class TestCyclist:
     def test_person_near_bicycle(self):
         fc = FakeComposites(["cyclist"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.3, 0.1, 0.5, 0.7]),
-            _det("bicycle", [0.3, 0.5, 0.6, 0.9]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.3, 0.1, 0.5, 0.7]),
+                _det("bicycle", [0.3, 0.5, 0.6, 0.9]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["cyclist"] is True
 
     def test_person_far_from_bicycle(self):
         fc = FakeComposites(["cyclist"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.0, 0.0, 0.1, 0.3]),
-            _det("bicycle", [0.7, 0.7, 0.9, 0.9]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.0, 0.0, 0.1, 0.3]),
+                _det("bicycle", [0.7, 0.7, 0.9, 0.9]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["cyclist"] is False
 
@@ -109,27 +123,33 @@ class TestCyclist:
 class TestPackageCarrier:
     def test_person_near_backpack(self):
         fc = FakeComposites(["package_carrier"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.2, 0.1, 0.4, 0.8]),
-            _det("backpack", [0.35, 0.2, 0.5, 0.5]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.2, 0.1, 0.4, 0.8]),
+                _det("backpack", [0.35, 0.2, 0.5, 0.5]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["package_carrier"] is True
 
     def test_person_near_suitcase(self):
         fc = FakeComposites(["package_carrier"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.2, 0.1, 0.4, 0.8]),
-            _det("suitcase", [0.4, 0.5, 0.6, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.2, 0.1, 0.4, 0.8]),
+                _det("suitcase", [0.4, 0.5, 0.6, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["package_carrier"] is True
 
     def test_no_package(self):
         fc = FakeComposites(["package_carrier"])
-        result = VisionResult(all_detections=[
-            _det("person", [0.2, 0.1, 0.4, 0.8]),
-        ])
+        result = VisionResult(
+            all_detections=[
+                _det("person", [0.2, 0.1, 0.4, 0.8]),
+            ]
+        )
         composites = fc.compute_composites(result)
         assert composites["package_carrier"] is False
 

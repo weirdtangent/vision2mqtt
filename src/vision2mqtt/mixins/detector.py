@@ -91,10 +91,7 @@ class DetectorMixin:
         confident = [obj for obj in objects if obj.confidence >= min_conf]
 
         # save all confident detections before label filtering (for composite logic)
-        all_detections = [
-            DetectedObject(label=obj.raw_label, raw_label=obj.raw_label, confidence=round(obj.confidence, 3), bbox=obj.bbox)
-            for obj in confident
-        ]
+        all_detections = [DetectedObject(label=obj.raw_label, raw_label=obj.raw_label, confidence=round(obj.confidence, 3), bbox=obj.bbox) for obj in confident]
 
         # filter by configured labels
         filtered = []
