@@ -17,6 +17,8 @@ services:
     #   - /dev/ax_mmb_dev:/dev/ax_mmb_dev
     environment:
       - TZ=America/New_York
+      # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)
+      # - LD_LIBRARY_PATH=/usr/lib/axcl
     healthcheck:
       test: ["CMD", "python3", "/app/src/healthcheck.py"]
       interval: 60s

@@ -191,7 +191,7 @@ class TestAxclBackend:
         detector = FakeDetector(sample_vision_config)
 
         mock_session = MagicMock()
-        mock_session.run.return_value = [np.array([], dtype=np.float32).reshape(0, 6)]
+        mock_session.run.return_value = [np.array([], dtype=np.float32).reshape(1, 0, 6)]
         detector._detector_model = mock_session
 
         event = MotionEvent("cam1", "Test", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
