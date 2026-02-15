@@ -37,25 +37,26 @@ class DetectorMixin:
         return model
 
     @staticmethod
-    def _resolve_input_size(input_shape: list[Any]) -> int:
-        """Derive the square spatial input size from a model input shape.
+    def _resolve_input_layout(input_shape: list[Any]) -> tuple[int, bool]:
+        """Derive the square spatial input size and layout from a model input shape.
 
         Handles NHWC [1, H, W, 3] and NCHW [1, 3, H, W] layouts.
+        Returns (spatial_size, is_nchw).
         Raises ValueError if the spatial size cannot be determined.
         """
         if len(input_shape) == 4:
             _, d1, d2, d3 = input_shape
             # NHWC: last dim is channels (1 or 3)
             if isinstance(d3, int) and d3 in (1, 3) and isinstance(d1, int) and isinstance(d2, int):
-                h, w = d1, d2
+                h, w, nchw = d1, d2, False
             # NCHW: second dim is channels (1 or 3)
             elif isinstance(d1, int) and d1 in (1, 3) and isinstance(d2, int) and isinstance(d3, int):
-                h, w = d2, d3
+                h, w, nchw = d2, d3, True
             else:
                 raise ValueError(f"Unable to determine spatial dimensions from shape {input_shape!r}")
             if h != w:
                 raise ValueError(f"Expected square spatial dimensions but got H={h}, W={w} from shape {input_shape!r}")
-            return h
+            return h, nchw
         raise ValueError(f"Expected 4D input shape but got {input_shape!r}")
 
     def _load_axcl_model(self: Vision2Mqtt, model_path: str) -> Any:
@@ -66,7 +67,9 @@ class DetectorMixin:
         # cache input metadata to avoid per-frame overhead
         input_info = session.get_inputs()[0]
         self._axcl_input_name: str = input_info.name
-        self._axcl_input_size: int = DetectorMixin._resolve_input_size(list(input_info.shape))
+        self._axcl_input_size: int
+        self._axcl_nchw: bool
+        self._axcl_input_size, self._axcl_nchw = DetectorMixin._resolve_input_layout(list(input_info.shape))
 
         return session
 
@@ -159,7 +162,9 @@ class DetectorMixin:
         pad_y = (input_size - new_h) // 2
         padded.paste(resized, (pad_x, pad_y))
 
-        input_data = np.array(padded, dtype=np.uint8)[np.newaxis, ...]  # add batch dim
+        input_data = np.array(padded, dtype=np.uint8)[np.newaxis, ...]  # NHWC (1, H, W, 3)
+        if self._axcl_nchw:
+            input_data = np.transpose(input_data, (0, 3, 1, 2))  # NHWC -> NCHW
 
         # run inference
         outputs = self._detector_model.run(None, {self._axcl_input_name: input_data})

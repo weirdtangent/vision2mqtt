@@ -51,12 +51,13 @@ RUN SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION} uv pip install --no-cache-dir . --
 
 # 6. Install axengine for AX8850 NPU support (optional, pure-python wheel from AXERA-TECH)
 ARG ENABLE_NPU=false
-ARG AXENGINE_VERSION=0.1.3
+ARG AXENGINE_TAG=0.1.3.rc2
+ARG AXENGINE_WHEEL=axengine-0.1.3-py3-none-any.whl
 RUN if [ "${ENABLE_NPU}" = "true" ]; then \
-        echo "Installing axengine v${AXENGINE_VERSION} for AX8850 NPU support..."; \
+        echo "Installing axengine (tag=${AXENGINE_TAG}) for AX8850 NPU support..."; \
         uv pip install --no-cache-dir \
-            "https://github.com/AXERA-TECH/pyaxengine/releases/download/${AXENGINE_VERSION}.rc2/axengine-${AXENGINE_VERSION}-py3-none-any.whl" \
-        || { echo >&2 "ERROR: Failed to install axengine v${AXENGINE_VERSION} while ENABLE_NPU=true."; exit 1; }; \
+            "https://github.com/AXERA-TECH/pyaxengine/releases/download/${AXENGINE_TAG}/${AXENGINE_WHEEL}" \
+        || { echo >&2 "ERROR: Failed to install axengine while ENABLE_NPU=true."; exit 1; }; \
     else \
         echo "Skipping axengine installation (ENABLE_NPU=${ENABLE_NPU})."; \
     fi
