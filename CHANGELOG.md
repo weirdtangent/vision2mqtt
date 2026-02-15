@@ -1,3 +1,11 @@
+## [0.2.2](https://github.com/weirdtangent/vision2mqtt/compare/v0.2.1...v0.2.2) (2026-02-15)
+
+
+### Bug Fixes
+
+* add checkout step to claude-code-review workflow ([9ece56c](https://github.com/weirdtangent/vision2mqtt/commit/9ece56ccaf58b7dc8563d0a043eb09d2b1e627b1))
+* add ldconfig for axengine provider detection ([6ffaa12](https://github.com/weirdtangent/vision2mqtt/commit/6ffaa12a2754018b730b352b1b97c5017c66b7be))
+
 ## [0.2.1](https://github.com/weirdtangent/vision2mqtt/compare/v0.2.0...v0.2.1) (2026-02-15)
 
 
