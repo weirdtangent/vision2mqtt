@@ -27,8 +27,14 @@ vision:
     - vehicle
     - animal
     - bird
+    - package
   min_confidence: 0.45           # minimum confidence threshold for detections
   concurrency: 1                 # number of worker tasks processing the queue
   max_queue: 20                  # max queued vision requests (oldest dropped when full)
   retain_presence: false          # publish retained ON/OFF presence per camera per label
+  composites:                    # composite detection types (require person + companion nearby)
+    - group                      # 2+ people detected
+    - dog_walker                 # person + dog
+    - cyclist                    # person + bicycle
+    - package_carrier            # person + backpack/suitcase/handbag
   debug_save_images: false        # save annotated images to /tmp for debugging

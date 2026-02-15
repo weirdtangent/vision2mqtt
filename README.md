@@ -84,15 +84,34 @@ vision:
     - vehicle
     - animal
     - bird
+    - package
   min_confidence: 0.45
   concurrency: 1
   max_queue: 20
   retain_presence: false
+  composites:                      # optional composite detection types
+    - group                        # 2+ people detected
+    - dog_walker                   # person + dog nearby
+    - cyclist                      # person + bicycle nearby
+    - package_carrier              # person + backpack/suitcase/handbag nearby
 ```
 
 ### Environment Variables
 
 While the config file is recommended, environment variables are also supported. See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for the full list of available environment variables.
+
+## Composite Detection
+
+When enabled via the `composites` config, vision2mqtt can detect higher-level scenarios by analyzing spatial relationships between objects in each frame:
+
+| Composite | Trigger | Description |
+|-----------|---------|-------------|
+| `group` | 2+ people | Multiple people detected in the same frame |
+| `dog_walker` | person + dog | A person near a dog |
+| `cyclist` | person + bicycle | A person near a bicycle |
+| `package_carrier` | person + backpack/suitcase/handbag | A person carrying a package |
+
+Composites use **all detections** (pre-label-filter), so companion objects like `dog` or `bicycle` are detected even if they aren't in your `labels` list. Each composite is published as a retained `ON`/`OFF` presence topic and as a Home Assistant binary sensor when HA discovery is enabled.
 
 ## MQTT Topics
 
@@ -105,6 +124,7 @@ While the config file is recommended, environment variables are also supported. 
 - `vision2mqtt/{camera_id}/{event_id}/objects` — JSON array of detected objects
 - `vision2mqtt/{camera_id}/{event_id}/summary` — JSON summary with label counts and timing
 - `vision2mqtt/{camera_id}/presence/{label}` — retained `ON`/`OFF` per camera per label (optional)
+- `vision2mqtt/{camera_id}/presence/{composite}` — retained `ON`/`OFF` per camera per composite type (optional)
 
 ### Example Output
 
@@ -140,6 +160,7 @@ COCO classes are simplified to categories useful for home security:
 | vehicle | car, truck, bus, motorcycle, bicycle |
 | animal | cat, dog, horse, cow, sheep, bear, elephant, zebra, giraffe |
 | bird | bird |
+| package | backpack, suitcase, handbag |
 
 ## Raspberry Pi 5 + M5Stack LLM-8850 Setup
 
