@@ -4,6 +4,7 @@ import asyncio
 import argparse
 import concurrent.futures
 import logging
+import psutil
 from json_logging import get_logger
 from mqtt_helper import MqttHelper
 from paho.mqtt.client import Client
@@ -61,6 +62,13 @@ class Base:
         super_enter = getattr(super(), "__enter__", None)
         if callable(super_enter):
             super_enter()
+
+        # Prime cpu_percent so first telemetry reading isn't 0
+        psutil.cpu_percent(interval=None)
+        # Probe for axcl-smi before MQTT connect so discovery includes NPU sensors
+        cast(Any, self)._axcl_smi_path = cast(Any, self)._probe_axcl_smi()
+        if cast(Any, self)._axcl_smi_path:
+            self.logger.info(f"axcl-smi found at {cast(Any, self)._axcl_smi_path} — NPU telemetry enabled")
 
         await cast(Any, self).mqttc_create()
         await cast(Any, self).init_detector()

@@ -47,6 +47,7 @@ class PublishMixin:
                     "entity_category": "diagnostic",
                     "icon": "mdi:eye",
                 },
+                **self.build_system_stats_components(),
             },
         }
 

@@ -38,6 +38,10 @@ class LoopsMixin:
             try:
                 await asyncio.sleep(60)
                 self.heartbeat_ready()
+                try:
+                    await self.publish_system_stats()
+                except Exception as err:
+                    self.logger.error(f"failed publishing system stats: {err!r}", exc_info=True)
             except asyncio.CancelledError:
                 self.logger.debug("heartbeat cancelled during sleep")
                 break

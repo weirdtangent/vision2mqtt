@@ -6,11 +6,12 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.composites import CompositesMixin
+from vision2mqtt.mixins.system_stats import SystemStatsMixin
 from vision2mqtt.mixins.publish import PublishMixin
 from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
 
 
-class FakePublisher(CompositesMixin, PublishMixin):
+class FakePublisher(CompositesMixin, SystemStatsMixin, PublishMixin):
     def __init__(self, vision_config, ha_enabled=False):
         self.vision_config = vision_config
         self.service = "vision2mqtt"
@@ -30,6 +31,7 @@ class FakePublisher(CompositesMixin, PublishMixin):
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
         self.mqtt_helper.stat_t = MagicMock(side_effect=lambda *args: "/".join(["vision2mqtt"] + [str(a) for a in args if a != "service"]))
         self.mqtt_helper.avty_t = MagicMock(return_value="vision2mqtt/availability")
+        self._axcl_smi_path = None
 
 
 async def _fake_to_thread(fn, *args):
