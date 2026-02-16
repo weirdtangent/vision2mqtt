@@ -128,6 +128,31 @@ Composites use **all detections** (pre-label-filter), so companion objects like 
 - `vision2mqtt/{camera_id}/presence/{label}` — retained `ON`/`OFF` per camera per label (optional)
 - `vision2mqtt/{camera_id}/presence/{composite}` — retained `ON`/`OFF` per camera per composite type (optional)
 
+### System Telemetry (published every 60s)
+
+Host metrics are always published when Home Assistant discovery is enabled:
+
+| Topic suffix | Metric | Unit |
+|-------------|--------|------|
+| `service/telemetry/cpu_usage` | CPU usage | % |
+| `service/telemetry/cpu_temperature` | CPU temperature | °C |
+| `service/telemetry/memory_usage` | Memory usage | % |
+| `service/telemetry/disk_usage` | Disk usage | % |
+| `service/telemetry/load_avg_1m` | Load average (1 min) | — |
+| `service/telemetry/load_avg_5m` | Load average (5 min) | — |
+| `service/telemetry/uptime` | System uptime | hours |
+
+NPU metrics are published when `axcl-smi` is available in the container (mount `/usr/bin/axcl`):
+
+| Topic suffix | Metric | Unit |
+|-------------|--------|------|
+| `service/telemetry/npu_temperature` | NPU temperature | °C |
+| `service/telemetry/npu_utilization` | NPU utilization | % |
+| `service/telemetry/npu_memory_used` | NPU memory used | MiB |
+| `service/telemetry/npu_memory_total` | NPU memory total | MiB |
+
+All telemetry sensors are registered as diagnostic entities on the service device in Home Assistant.
+
 ### Example Output
 
 **Objects:**
@@ -229,6 +254,7 @@ services:
       - ./config:/config
       - ./models:/models
       - /usr/lib/axcl:/usr/lib/axcl:ro
+      - /usr/bin/axcl:/usr/bin/axcl:ro    # enables NPU telemetry via axcl-smi
     environment:
       - TZ=America/New_York
       - LD_LIBRARY_PATH=/usr/lib/axcl

@@ -11,6 +11,7 @@ services:
       - ./models:/models
       # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)
       # - /usr/lib/axcl:/usr/lib/axcl:ro
+      # - /usr/bin/axcl:/usr/bin/axcl:ro    # enables NPU telemetry via axcl-smi
     # Uncomment for AX8850 NPU support (M5Stack LLM-8850 / Raspberry Pi 5)
     # devices:
     #   - /dev/axcl_host:/dev/axcl_host
