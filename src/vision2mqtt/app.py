@@ -3,9 +3,8 @@
 import asyncio
 import argparse
 from json_logging import setup_logging, get_logger
-from mqtt_helper import MqttError
+from mqtt_helper import ConfigError, MqttError
 from .core import Vision2Mqtt
-from .mixins.helpers import ConfigError
 
 
 def build_parser() -> argparse.ArgumentParser:

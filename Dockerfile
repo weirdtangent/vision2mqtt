@@ -4,6 +4,7 @@ FROM python:3.14-slim
 # ===== Project Variables =====
 ARG APP_NAME=vision2mqtt
 ENV APP_NAME=${APP_NAME}
+ENV READY_FILE=/tmp/${APP_NAME}.ready
 ARG SERVICE_DESC="YOLO object detection service for MQTT camera events"
 ARG VERSION=0.0.0
 ENV APP_VERSION=${VERSION}
