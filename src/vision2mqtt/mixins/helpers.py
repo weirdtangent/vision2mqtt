@@ -9,18 +9,14 @@ import signal
 import threading
 from types import FrameType
 from typing import TYPE_CHECKING, Any, cast
+
+from mqtt_helper import ConfigError
 import yaml
 
 if TYPE_CHECKING:
     from vision2mqtt.interface import VisionServiceProtocol as Vision2Mqtt
 
 READY_FILE = os.getenv("READY_FILE", "/tmp/vision2mqtt.ready")
-
-
-class ConfigError(ValueError):
-    """Raised when the configuration file is invalid."""
-
-    pass
 
 
 class HelpersMixin:
