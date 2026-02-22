@@ -152,6 +152,16 @@ class PublishMixin:
             "icon": "mdi:timer-outline",
         }
 
+        # sensor: camera mode (diagnostic)
+        cmps["camera_mode"] = {
+            "p": "sensor",
+            "name": "Camera mode",
+            "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, "camera_mode"),
+            "stat_t": f"{prefix}/{camera_id}/sensor/camera_mode",
+            "icon": "mdi:cog",
+            "entity_category": "diagnostic",
+        }
+
         # camera: annotated snapshot with bounding boxes
         cmps["annotated_image"] = {
             "p": "camera",
@@ -181,6 +191,11 @@ class PublishMixin:
         discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
         topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{camera_id}/config"
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
+
+        # publish camera mode value
+        mode = self._get_camera_mode(camera_id)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/camera_mode", mode)
+
         self.logger.info(f"published HA camera discovery for '{camera_name} Vision' ({camera_id})")
 
     async def publish_camera_state(self: Vision2Mqtt, camera_id: str, object_count: int, processing_time_ms: float) -> None:
@@ -192,6 +207,8 @@ class PublishMixin:
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/object_count", str(object_count))
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/last_detection", now_iso)
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/processing_time", str(round(processing_time_ms, 1)))
+        mode = self._get_camera_mode(camera_id)
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/camera_mode", mode)
 
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
         prefix = self.service

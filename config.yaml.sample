@@ -39,3 +39,15 @@ vision:
     - student                    # person + backpack
     - package_carrier            # person + suitcase/handbag
   debug_save_images: false        # save annotated images to /tmp for debugging
+  # cameras:                      # per-camera config overrides (optional, YAML only)
+  #   "BIRD_FEEDER_CAM_ID":       # camera ID from blink/source system
+  #     mode: feeder              # preset: raises person threshold, lowers bird, infers bird on motion
+  #   "NURSERY_CAM_ID":
+  #     mode: baby                # preset: lowers person threshold, suppresses outdoor labels
+  #   "SHED_CAM_ID":
+  #     mode: security            # preset: accepts any detection at very low confidence
+  #   "OTHER_CAM_ID":             # or explicit per-label overrides (no preset needed)
+  #     min_confidence:
+  #       person: 0.90
+  #       bird: 0.20
+  #     default_label: bird       # assume unclassified motion is this label

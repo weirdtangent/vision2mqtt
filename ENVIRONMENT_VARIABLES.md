@@ -36,6 +36,10 @@ While using a config.yaml file is the recommended approach, vision2mqtt also sup
 
 - `HOME_ASSISTANT` (optional, default = true) - enable Home Assistant MQTT discovery
 
+## Per-Camera Overrides
+
+Per-camera config overrides (`vision.cameras`) are **YAML-only** — structured per-label confidence thresholds and mode presets don't map to flat environment variables. See `config.yaml.sample` for the full schema.
+
 ## Other Settings
 
 - `DEBUG` (optional, default = false) - enable debug logging

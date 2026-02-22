@@ -6,13 +6,14 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.composites import CompositesMixin
+from vision2mqtt.mixins.helpers import HelpersMixin
 from vision2mqtt.mixins.presence import PresenceTracker
 from vision2mqtt.mixins.system_stats import SystemStatsMixin
 from vision2mqtt.mixins.publish import PublishMixin
-from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
+from vision2mqtt.models.events import CameraConfig, DetectedObject, MotionEvent, VisionResult
 
 
-class FakePublisher(CompositesMixin, SystemStatsMixin, PublishMixin):
+class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixin):
     def __init__(self, vision_config, ha_enabled=False):
         self.vision_config = vision_config
         self.service = "vision2mqtt"
@@ -286,7 +287,7 @@ class TestCameraDiscovery:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         cmps = payload["cmps"]
         # binary sensor per label
         assert "presence_person" in cmps
@@ -310,7 +311,7 @@ class TestCameraDiscovery:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         cmps = payload["cmps"]
         assert cmps["presence_person"]["icon"] == "mdi:account"
         assert cmps["presence_vehicle"]["icon"] == "mdi:car-side"
@@ -325,7 +326,7 @@ class TestCameraDiscovery:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         assert payload["device"]["name"] == "Front Yard Vision"
 
     @pytest.mark.asyncio
@@ -341,6 +342,7 @@ class TestCameraDiscovery:
             "retain_presence": False,
             "debug_save_images": False,
             "composites": ["dog_walker", "group"],
+            "cameras": {},
         }
         pub = FakePublisher(config, ha_enabled=True)
 
@@ -348,7 +350,7 @@ class TestCameraDiscovery:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         cmps = payload["cmps"]
         assert "presence_dog_walker" in cmps
         assert cmps["presence_dog_walker"]["icon"] == "mdi:dog-service"
@@ -533,7 +535,7 @@ class TestCameraDiscoveryFrequency:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         cmps = payload["cmps"]
         assert "frequency_person" in cmps
         assert "frequency_vehicle" in cmps
@@ -559,6 +561,7 @@ class TestCameraDiscoveryFrequency:
             "composites": ["dog_walker"],
             "presence_cooldown": 60,
             "frequency_window": 3600,
+            "cameras": {},
         }
         pub = FakePublisher(config, ha_enabled=True)
 
@@ -566,7 +569,7 @@ class TestCameraDiscoveryFrequency:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("cam1", "Front Yard")
 
-        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
         cmps = payload["cmps"]
         assert "frequency_dog_walker" in cmps
         assert cmps["frequency_dog_walker"]["unit_of_measurement"] == "detections/h"
@@ -653,3 +656,63 @@ class TestCheckPresenceCooldowns:
             await pub.check_presence_cooldowns()
 
         pub.mqtt_helper.safe_publish.assert_not_called()
+
+
+class TestCameraModeDiscovery:
+    @pytest.mark.asyncio
+    async def test_discovery_includes_camera_mode_sensor(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])
+        cmps = payload["cmps"]
+        assert "camera_mode" in cmps
+        assert cmps["camera_mode"]["p"] == "sensor"
+        assert cmps["camera_mode"]["icon"] == "mdi:cog"
+        assert cmps["camera_mode"]["entity_category"] == "diagnostic"
+        assert cmps["camera_mode"]["stat_t"] == "vision2mqtt/cam1/sensor/camera_mode"
+
+    @pytest.mark.asyncio
+    async def test_mode_value_published_on_discovery(self, sample_vision_config):
+        sample_vision_config["cameras"] = {
+            "FEEDER": CameraConfig(mode="feeder"),
+        }
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("FEEDER", "Bird Feeder")
+
+        mode_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if c.args[0] == "vision2mqtt/FEEDER/sensor/camera_mode"]
+        assert len(mode_calls) == 1
+        assert mode_calls[0].args[1] == "feeder"
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_camera_publishes_default_mode(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        mode_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if c.args[0] == "vision2mqtt/cam1/sensor/camera_mode"]
+        assert len(mode_calls) == 1
+        assert mode_calls[0].args[1] == "default"
+
+    @pytest.mark.asyncio
+    async def test_camera_state_publishes_mode(self, sample_vision_config):
+        sample_vision_config["cameras"] = {
+            "FEEDER": CameraConfig(mode="feeder"),
+        }
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_state("FEEDER", 2, 10.5)
+
+        mode_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if c.args[0] == "vision2mqtt/FEEDER/sensor/camera_mode"]
+        assert len(mode_calls) == 1
+        assert mode_calls[0].args[1] == "feeder"

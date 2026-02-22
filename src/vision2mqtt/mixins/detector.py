@@ -87,9 +87,14 @@ class DetectorMixin:
 
         elapsed_ms = (time.monotonic() - start) * 1000
 
-        # filter by confidence first
-        min_conf = self.vision_config["min_confidence"]
-        confident = [obj for obj in objects if obj.confidence >= min_conf]
+        # filter by per-camera per-label confidence
+        confident = []
+        for obj in objects:
+            simplified = self.get_simplified_label(obj.raw_label)
+            effective_label = simplified or obj.raw_label
+            min_conf = self._get_camera_min_confidence(event.camera_id, effective_label)
+            if obj.confidence >= min_conf:
+                confident.append(obj)
 
         # save all confident detections before label filtering (for composite logic)
         all_detections = [DetectedObject(label=obj.raw_label, raw_label=obj.raw_label, confidence=round(obj.confidence, 3), bbox=obj.bbox) for obj in confident]
@@ -105,6 +110,19 @@ class DetectorMixin:
                         raw_label=obj.raw_label,
                         confidence=round(obj.confidence, 3),
                         bbox=obj.bbox,
+                    )
+                )
+
+        # inject default_label when no objects survive filtering
+        if not filtered:
+            default_label = self._get_camera_default_label(event.camera_id)
+            if default_label:
+                filtered.append(
+                    DetectedObject(
+                        label=default_label,
+                        raw_label=default_label,
+                        confidence=0.0,
+                        bbox=[0.0, 0.0, 1.0, 1.0],
                     )
                 )
 

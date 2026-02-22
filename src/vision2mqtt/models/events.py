@@ -22,6 +22,13 @@ class DetectedObject:
 
 
 @dataclass
+class CameraConfig:
+    mode: str = "default"
+    min_confidence: dict[str, float] | float | None = None
+    default_label: str | None = None
+
+
+@dataclass
 class VisionResult:
     objects: list[DetectedObject] = field(default_factory=list)
     all_detections: list[DetectedObject] = field(default_factory=list)  # pre-label-filter
