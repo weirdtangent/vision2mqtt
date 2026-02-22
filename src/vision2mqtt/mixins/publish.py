@@ -78,7 +78,7 @@ class PublishMixin:
         labels = self.vision_config["labels"]
         composites = self.vision_config.get("composites") or []
 
-        # binary sensors for each configured label
+        # binary sensors + frequency sensors for each configured label
         cmps: dict[str, dict] = {}
         for label in labels:
             cmps[f"presence_{label}"] = {
@@ -91,8 +91,17 @@ class PublishMixin:
                 "device_class": "occupancy" if label == "person" else "motion",
                 "icon": LABEL_ICONS.get(label, "mdi:motion-sensor"),
             }
+            cmps[f"frequency_{label}"] = {
+                "p": "sensor",
+                "name": f"{label.title()} frequency",
+                "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, f"frequency_{label}"),
+                "stat_t": f"{prefix}/{camera_id}/sensor/frequency/{label}",
+                "unit_of_measurement": "detections/h",
+                "state_class": "measurement",
+                "icon": LABEL_ICONS.get(label, "mdi:motion-sensor"),
+            }
 
-        # binary sensors for each composite type
+        # binary sensors + frequency sensors for each composite type
         for comp in composites:
             cmps[f"presence_{comp}"] = {
                 "p": "binary_sensor",
@@ -102,6 +111,15 @@ class PublishMixin:
                 "payload_on": "ON",
                 "payload_off": "OFF",
                 "device_class": "motion",
+                "icon": LABEL_ICONS.get(comp, "mdi:motion-sensor"),
+            }
+            cmps[f"frequency_{comp}"] = {
+                "p": "sensor",
+                "name": f"{comp.replace('_', ' ').title()} frequency",
+                "uniq_id": self.mqtt_helper.dev_unique_id(camera_id, f"frequency_{comp}"),
+                "stat_t": f"{prefix}/{camera_id}/sensor/frequency/{comp}",
+                "unit_of_measurement": "detections/h",
+                "state_class": "measurement",
                 "icon": LABEL_ICONS.get(comp, "mdi:motion-sensor"),
             }
 
@@ -220,8 +238,12 @@ class PublishMixin:
         }
         await asyncio.to_thread(self.mqtt_helper.safe_publish, summary_topic, json.dumps(summary_payload))
 
-        # publish per-label presence (optional, retained)
+        # publish per-label presence (optional, retained) with cooldown + frequency
         if self.vision_config.get("retain_presence"):
+            cooldown: int = self.vision_config.get("presence_cooldown", 60)
+            frequency_window: int = self.vision_config.get("frequency_window", 3600)
+            tracker = self._presence_tracker
+
             # Collect active specific labels and their parent groups
             active_labels: set[str] = set()
             for obj in result.objects:
@@ -230,17 +252,44 @@ class PublishMixin:
                 if parent:
                     active_labels.add(parent)
 
+            # Record detections for active labels
+            for label in active_labels:
+                tracker.record_detection(event.camera_id, label)
+
             for label in self.vision_config["labels"]:
                 presence_topic = f"{prefix}/{event.camera_id}/presence/{label}"
-                state = "ON" if label in active_labels else "OFF"
+                if cooldown > 0:
+                    on = tracker.is_presence_on(event.camera_id, label, cooldown)
+                else:
+                    on = label in active_labels
+                state = "ON" if on else "OFF"
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
+                tracker.set_published_state(event.camera_id, label, on)
+
+                # publish frequency sensor
+                freq = tracker.get_frequency(event.camera_id, label, frequency_window)
+                freq_topic = f"{prefix}/{event.camera_id}/sensor/frequency/{label}"
+                await asyncio.to_thread(self.mqtt_helper.safe_publish, freq_topic, str(round(freq, 1)))
 
             # publish composite presence
             composites = self.compute_composites(result)
             for comp_name, comp_state in composites.items():
+                # Record composite detections when active
+                if comp_state:
+                    tracker.record_detection(event.camera_id, comp_name)
+
                 presence_topic = f"{prefix}/{event.camera_id}/presence/{comp_name}"
-                state = "ON" if comp_state else "OFF"
+                if cooldown > 0:
+                    on = tracker.is_presence_on(event.camera_id, comp_name, cooldown)
+                else:
+                    on = comp_state
+                state = "ON" if on else "OFF"
                 await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, state)
+                tracker.set_published_state(event.camera_id, comp_name, on)
+
+                freq = tracker.get_frequency(event.camera_id, comp_name, frequency_window)
+                freq_topic = f"{prefix}/{event.camera_id}/sensor/frequency/{comp_name}"
+                await asyncio.to_thread(self.mqtt_helper.safe_publish, freq_topic, str(round(freq, 1)))
 
         # publish annotated snapshot image
         if result.annotated_image_b64:
@@ -251,3 +300,31 @@ class PublishMixin:
         await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms)
 
         self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): " f"{len(result.objects)} objects, {result.processing_time_ms}ms")
+
+    async def check_presence_cooldowns(self: Vision2Mqtt) -> None:
+        """Sweep expired presence keys and publish OFF + decayed frequency values.
+
+        Called from heartbeat to expire presence that was held ON by cooldown.
+        """
+        if not self.vision_config.get("retain_presence"):
+            return
+
+        cooldown: int = self.vision_config.get("presence_cooldown", 60)
+        if cooldown <= 0:
+            return
+
+        frequency_window: int = self.vision_config.get("frequency_window", 3600)
+        prefix = self.service
+        tracker = self._presence_tracker
+
+        # Expire presence keys that timed out
+        for camera_id, label in tracker.get_expired_presence_keys(cooldown):
+            presence_topic = f"{prefix}/{camera_id}/presence/{label}"
+            await asyncio.to_thread(self.mqtt_helper.safe_publish, presence_topic, "OFF")
+            tracker.set_published_state(camera_id, label, False)
+
+        # Re-publish all frequency values so they decay between detection events
+        for camera_id, label in tracker.tracked_keys():
+            freq = tracker.get_frequency(camera_id, label, frequency_window)
+            freq_topic = f"{prefix}/{camera_id}/sensor/frequency/{label}"
+            await asyncio.to_thread(self.mqtt_helper.safe_publish, freq_topic, str(round(freq, 1)))

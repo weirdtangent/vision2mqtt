@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.composites import CompositesMixin
+from vision2mqtt.mixins.presence import PresenceTracker
 from vision2mqtt.mixins.system_stats import SystemStatsMixin
 from vision2mqtt.mixins.publish import PublishMixin
 from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
@@ -31,6 +32,7 @@ class FakePublisher(CompositesMixin, SystemStatsMixin, PublishMixin):
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
         self.mqtt_helper.stat_t = MagicMock(side_effect=lambda *args: "/".join(["vision2mqtt"] + [str(a) for a in args if a != "service"]))
         self.mqtt_helper.avty_t = MagicMock(return_value="vision2mqtt/availability")
+        self._presence_tracker = PresenceTracker()
         self._axcl_smi_path = None
 
 
@@ -383,5 +385,271 @@ class TestCameraState:
         with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_state("cam1", 3, 12.345)
+
+        pub.mqtt_helper.safe_publish.assert_not_called()
+
+
+class TestPresenceCooldown:
+    @pytest.mark.asyncio
+    async def test_presence_stays_on_within_cooldown(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 60,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+
+        # First event: person detected
+        event1 = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result_with_person = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event1, result_with_person)
+
+        # Second event: no person (but cooldown should keep it ON)
+        pub.mqtt_helper.safe_publish.reset_mock()
+        event2 = MotionEvent("cam1", "Front Yard", "ev2", "", "2026-02-14T15:30:50", "test")
+        result_empty = VisionResult(objects=[], processing_time_ms=3.0)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event2, result_empty)
+
+        # Person presence should still be ON due to cooldown
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            if c.args[0] == "vision2mqtt/cam1/presence/person":
+                assert c.args[1] == "ON"
+                break
+        else:
+            pytest.fail("person presence topic not published")
+
+    @pytest.mark.asyncio
+    async def test_zero_cooldown_gives_instant_off(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 0,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+
+        # First event: person detected
+        event1 = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result_with_person = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event1, result_with_person)
+
+        # Second event: no person — should go OFF immediately
+        pub.mqtt_helper.safe_publish.reset_mock()
+        event2 = MotionEvent("cam1", "Front Yard", "ev2", "", "2026-02-14T15:30:50", "test")
+        result_empty = VisionResult(objects=[], processing_time_ms=3.0)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event2, result_empty)
+
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            if c.args[0] == "vision2mqtt/cam1/presence/person":
+                assert c.args[1] == "OFF"
+                break
+        else:
+            pytest.fail("person presence topic not published")
+
+
+class TestFrequencySensor:
+    @pytest.mark.asyncio
+    async def test_frequency_published_with_presence(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 60,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+
+        event = MotionEvent("cam1", "Front Yard", "ev1", "", "2026-02-14T15:30:45", "test")
+        result = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(event, result)
+
+        topics = [c.args[0] for c in pub.mqtt_helper.safe_publish.call_args_list]
+        assert "vision2mqtt/cam1/sensor/frequency/person" in topics
+        assert "vision2mqtt/cam1/sensor/frequency/vehicle" in topics
+        assert "vision2mqtt/cam1/sensor/frequency/animal" in topics
+        assert "vision2mqtt/cam1/sensor/frequency/bird" in topics
+
+        # Person frequency should be > 0
+        for c in pub.mqtt_helper.safe_publish.call_args_list:
+            if c.args[0] == "vision2mqtt/cam1/sensor/frequency/person":
+                assert float(c.args[1]) > 0
+                break
+
+
+class TestCameraDiscoveryFrequency:
+    @pytest.mark.asyncio
+    async def test_discovery_includes_frequency_sensors(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        cmps = payload["cmps"]
+        assert "frequency_person" in cmps
+        assert "frequency_vehicle" in cmps
+        assert "frequency_animal" in cmps
+        assert "frequency_bird" in cmps
+        assert cmps["frequency_person"]["p"] == "sensor"
+        assert cmps["frequency_person"]["unit_of_measurement"] == "detections/h"
+        assert cmps["frequency_person"]["state_class"] == "measurement"
+        assert cmps["frequency_person"]["stat_t"] == "vision2mqtt/cam1/sensor/frequency/person"
+
+    @pytest.mark.asyncio
+    async def test_discovery_includes_composite_frequency(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": False,
+            "debug_save_images": False,
+            "composites": ["dog_walker"],
+            "presence_cooldown": 60,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("cam1", "Front Yard")
+
+        payload = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])
+        cmps = payload["cmps"]
+        assert "frequency_dog_walker" in cmps
+        assert cmps["frequency_dog_walker"]["unit_of_measurement"] == "detections/h"
+
+
+class TestCheckPresenceCooldowns:
+    @pytest.mark.asyncio
+    async def test_expires_presence_and_publishes_off(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 60,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+        tracker = pub._presence_tracker
+
+        # Simulate a past detection + published ON state
+        tracker.record_detection("cam1", "person", now=100.0)
+        tracker.set_published_state("cam1", "person", True)
+
+        # Fast-forward time so cooldown has expired
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio, patch("time.monotonic", return_value=200.0):
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.check_presence_cooldowns()
+
+        # Should have published OFF for person
+        off_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if c.args[0] == "vision2mqtt/cam1/presence/person"]
+        assert len(off_calls) == 1
+        assert off_calls[0].args[1] == "OFF"
+
+    @pytest.mark.asyncio
+    async def test_skips_when_cooldown_zero(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": True,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 0,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.check_presence_cooldowns()
+
+        pub.mqtt_helper.safe_publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_retain_presence_disabled(self):
+        config = {
+            "backend": "ultralytics",
+            "model": "yolo26n.pt",
+            "subscribe_topics": ["+/vision/request"],
+            "labels": ["person", "vehicle", "animal", "bird"],
+            "min_confidence": 0.45,
+            "concurrency": 1,
+            "max_queue": 20,
+            "retain_presence": False,
+            "debug_save_images": False,
+            "composites": [],
+            "presence_cooldown": 60,
+            "frequency_window": 3600,
+        }
+        pub = FakePublisher(config)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.check_presence_cooldowns()
 
         pub.mqtt_helper.safe_publish.assert_not_called()

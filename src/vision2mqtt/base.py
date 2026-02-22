@@ -13,6 +13,7 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 from vision2mqtt.interface import VisionServiceProtocol as Vision2Mqtt
+from vision2mqtt.mixins.presence import PresenceTracker
 from vision2mqtt.models.events import MotionEvent
 
 
@@ -54,6 +55,8 @@ class Base:
         self.ha_enabled: bool = self.config.get("home_assistant", True)
         self.seen_cameras: set[str] = set()
         self._camera_discovery_lock = asyncio.Lock()
+
+        self._presence_tracker = PresenceTracker()
 
         max_queue = self.vision_config.get("max_queue", 20)
         self.queue: asyncio.Queue[MotionEvent] = asyncio.Queue(maxsize=max_queue)

@@ -117,7 +117,9 @@ class HelpersMixin:
             "max_queue":     int(str(vision.get("max_queue")        or os.getenv("VISION_MAX_QUEUE", "20"))),
             "retain_presence":  bool(vision.get("retain_presence",   os.getenv("VISION_RETAIN_PRESENCE", "").lower() == "true")),
             "debug_save_images": bool(vision.get("debug_save_images", os.getenv("VISION_DEBUG_SAVE", "").lower() == "true")),
-            "composites":       list(vision.get("composites")       or []),
+            "composites":        list(vision.get("composites")       or []),
+            "presence_cooldown": int(str(vision.get("presence_cooldown") or os.getenv("VISION_PRESENCE_COOLDOWN", "60"))),
+            "frequency_window":  int(str(vision.get("frequency_window")  or os.getenv("VISION_FREQUENCY_WINDOW", "3600"))),
         }
 
         ha_raw = config.get("home_assistant")
