@@ -28,7 +28,7 @@ def _bbox_gap(a: list[float], b: list[float]) -> float:
     """
     dx = max(a[0] - b[2], b[0] - a[2], 0.0)
     dy = max(a[1] - b[3], b[1] - a[3], 0.0)
-    return (dx**2 + dy**2) ** 0.5
+    return float((dx**2 + dy**2) ** 0.5)
 
 
 def _has_nearby_pair(persons: list[DetectedObject], companions: list[DetectedObject], threshold: float) -> bool:
