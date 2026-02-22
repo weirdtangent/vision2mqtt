@@ -10,6 +10,8 @@ Designed to work with [amcrest2mqtt](https://github.com/weirdtangent/amcrest2mqt
 and [blink2mqtt](https://github.com/weirdtangent/blink2mqtt), but any MQTT client
 can publish vision requests in the expected format.
 
+> **v1.0.0** — Per-camera config overrides, composite detection (group, dog walker, cyclist), presence cooldown, system & NPU telemetry, and full Home Assistant MQTT discovery.
+
 ## How It Works
 
 ```
