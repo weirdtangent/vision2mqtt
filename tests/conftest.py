@@ -16,6 +16,8 @@ def sample_vision_config():
         "retain_presence": False,
         "debug_save_images": False,
         "composites": [],
+        "presence_cooldown": 60,
+        "frequency_window": 3600,
     }
 
 

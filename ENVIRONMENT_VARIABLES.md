@@ -28,6 +28,8 @@ While using a config.yaml file is the recommended approach, vision2mqtt also sup
 - `VISION_CONCURRENCY` (optional, default = 1) - number of worker tasks processing the queue
 - `VISION_MAX_QUEUE` (optional, default = 20) - maximum queued vision requests (oldest dropped when full)
 - `VISION_RETAIN_PRESENCE` (optional, default = false) - publish retained ON/OFF presence per camera per label
+- `VISION_PRESENCE_COOLDOWN` (optional, default = 60) - seconds to hold presence ON after last detection (0 = instant off)
+- `VISION_FREQUENCY_WINDOW` (optional, default = 3600) - rolling window in seconds for detections/hour frequency sensor
 - `VISION_DEBUG_SAVE` (optional, default = false) - save annotated images to /tmp for debugging
 
 ## Home Assistant Settings
