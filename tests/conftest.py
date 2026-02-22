@@ -2,6 +2,8 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import pytest
 
+from vision2mqtt.models.events import CameraConfig
+
 
 @pytest.fixture
 def sample_vision_config():
@@ -18,7 +20,20 @@ def sample_vision_config():
         "composites": [],
         "presence_cooldown": 60,
         "frequency_window": 3600,
+        "cameras": {},
     }
+
+
+@pytest.fixture
+def feeder_vision_config(sample_vision_config):
+    sample_vision_config["cameras"] = {
+        "FEEDER_CAM": CameraConfig(
+            mode="feeder",
+            min_confidence={"person": 0.90, "vehicle": 0.95, "bird": 0.20, "animal": 0.25},
+            default_label="bird",
+        ),
+    }
+    return sample_vision_config
 
 
 @pytest.fixture

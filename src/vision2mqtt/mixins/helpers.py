@@ -13,10 +13,28 @@ from typing import TYPE_CHECKING, Any, cast
 from mqtt_helper import ConfigError
 import yaml
 
+from vision2mqtt.models.events import CameraConfig
+
 if TYPE_CHECKING:
     from vision2mqtt.interface import VisionServiceProtocol as Vision2Mqtt
 
 READY_FILE = os.getenv("READY_FILE", "/tmp/vision2mqtt.ready")
+
+_CAMERA_MODE_PRESETS: dict[str, dict[str, Any]] = {
+    "default": {},
+    "feeder": {
+        "min_confidence": {"person": 0.90, "vehicle": 0.95, "bird": 0.20, "animal": 0.25},
+        "default_label": "bird",
+    },
+    "baby": {
+        "min_confidence": {"person": 0.25, "vehicle": 0.99, "bird": 0.99, "animal": 0.80},
+        "default_label": None,
+    },
+    "security": {
+        "min_confidence": {"person": 0.25, "vehicle": 0.25, "bird": 0.25, "animal": 0.25},
+        "default_label": None,
+    },
+}
 
 
 class HelpersMixin:
@@ -90,6 +108,7 @@ class HelpersMixin:
         # Merge with environment vars
         mqtt = cast(dict[str, Any], config.get("mqtt", {}))
         vision = cast(dict[str, Any], config.get("vision", {}))
+        raw_cameras: dict[str, Any] = vision.get("cameras", {})
 
         # fmt: off
         mqtt = {
@@ -122,6 +141,41 @@ class HelpersMixin:
             "frequency_window":  int(str(vision.get("frequency_window")  or os.getenv("VISION_FREQUENCY_WINDOW", "3600"))),
         }
 
+        # Expand per-camera config overrides
+        cameras: dict[str, CameraConfig] = {}
+        for cam_id, cam_raw in raw_cameras.items():
+            if not isinstance(cam_raw, dict):
+                raise ConfigError(f"vision.cameras.{cam_id}: expected a mapping, got {type(cam_raw).__name__}")
+            mode = str(cam_raw.get("mode", "default"))
+            if mode not in _CAMERA_MODE_PRESETS:
+                raise ConfigError(f"vision.cameras.{cam_id}: unknown mode '{mode}' (valid: {', '.join(_CAMERA_MODE_PRESETS)})")
+
+            # Start from preset defaults
+            preset = _CAMERA_MODE_PRESETS[mode]
+            merged_conf: dict[str, float] | float | None = None
+            if "min_confidence" in preset:
+                merged_conf = dict(preset["min_confidence"]) if isinstance(preset["min_confidence"], dict) else preset["min_confidence"]
+
+            # Overlay explicit min_confidence from camera block
+            raw_conf = cam_raw.get("min_confidence")
+            if raw_conf is not None:
+                if isinstance(raw_conf, dict):
+                    if merged_conf is None:
+                        merged_conf = {}
+                    elif isinstance(merged_conf, (int, float)):
+                        merged_conf = {}
+                    for k, v in raw_conf.items():
+                        merged_conf[k] = float(v)
+                elif isinstance(raw_conf, (int, float)):
+                    merged_conf = float(raw_conf)
+                else:
+                    raise ConfigError(f"vision.cameras.{cam_id}.min_confidence: expected dict or number, got {type(raw_conf).__name__}")
+
+            default_label = cam_raw.get("default_label", preset.get("default_label"))
+            cameras[cam_id] = CameraConfig(mode=mode, min_confidence=merged_conf, default_label=default_label)
+
+        vision["cameras"] = cameras
+
         ha_raw = config.get("home_assistant")
         home_assistant = str(ha_raw if ha_raw is not None else os.getenv("HOME_ASSISTANT", "true")).lower() == "true"
 
@@ -145,3 +199,29 @@ class HelpersMixin:
             raise ConfigError(f"`vision.backend` must be 'ultralytics' or 'axcl', got '{vision['backend']}'")
 
         return config
+
+    def _get_camera_min_confidence(self: Vision2Mqtt, camera_id: str, label: str) -> float:
+        cameras: dict[str, CameraConfig] = self.vision_config.get("cameras", {})
+        cam_cfg = cameras.get(camera_id)
+        if cam_cfg and cam_cfg.min_confidence is not None:
+            if isinstance(cam_cfg.min_confidence, dict):
+                if label in cam_cfg.min_confidence:
+                    return cam_cfg.min_confidence[label]
+                # per-label dict but label not listed — fall through to global
+            else:
+                return cam_cfg.min_confidence
+        return float(self.vision_config["min_confidence"])
+
+    def _get_camera_default_label(self: Vision2Mqtt, camera_id: str) -> str | None:
+        cameras: dict[str, CameraConfig] = self.vision_config.get("cameras", {})
+        cam_cfg = cameras.get(camera_id)
+        if cam_cfg:
+            return cam_cfg.default_label
+        return None
+
+    def _get_camera_mode(self: Vision2Mqtt, camera_id: str) -> str:
+        cameras: dict[str, CameraConfig] = self.vision_config.get("cameras", {})
+        cam_cfg = cameras.get(camera_id)
+        if cam_cfg:
+            return cam_cfg.mode
+        return "default"

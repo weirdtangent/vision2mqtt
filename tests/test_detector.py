@@ -8,11 +8,12 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.detector import DetectorMixin
+from vision2mqtt.mixins.helpers import HelpersMixin
 from vision2mqtt.mixins.labels import LabelsMixin
-from vision2mqtt.models.events import DetectedObject, MotionEvent
+from vision2mqtt.models.events import CameraConfig, DetectedObject, MotionEvent
 
 
-class FakeDetector(DetectorMixin, LabelsMixin):
+class FakeDetector(DetectorMixin, HelpersMixin, LabelsMixin):
     def __init__(self, vision_config):
         self.vision_config = vision_config
         self.logger = MagicMock()
@@ -407,3 +408,103 @@ class TestPostprocessYolo26:
         bad_head = np.zeros((1, 4, 4, 100), dtype=np.float32)  # 100 != 84 or 144
         with pytest.raises(ValueError, match="channel mismatch"):
             DetectorMixin._postprocess_yolo_raw([bad_head], input_size=640, num_classes=80)
+
+
+class TestPerCameraDetection:
+    @pytest.mark.asyncio
+    async def test_per_label_confidence_filters(self, sample_vision_config):
+        """Per-camera per-label confidence: high threshold rejects person, low threshold passes bird."""
+        sample_vision_config["cameras"] = {
+            "FEEDER": CameraConfig(min_confidence={"person": 0.90, "bird": 0.20}),
+        }
+        detector = FakeDetector(sample_vision_config)
+
+        raw_objects = [
+            DetectedObject(label="person", raw_label="person", confidence=0.76, bbox=[0.1, 0.2, 0.3, 0.4]),
+            DetectedObject(label="bird", raw_label="bird", confidence=0.22, bbox=[0.5, 0.6, 0.7, 0.8]),
+        ]
+
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
+            event = MotionEvent("FEEDER", "Bird Feeder", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "bird"
+
+    @pytest.mark.asyncio
+    async def test_default_label_injected_when_empty(self, sample_vision_config):
+        """default_label injected when no objects survive filtering."""
+        sample_vision_config["cameras"] = {
+            "FEEDER": CameraConfig(default_label="bird"),
+        }
+        detector = FakeDetector(sample_vision_config)
+
+        # nothing above confidence threshold
+        raw_objects = [
+            DetectedObject(label="chair", raw_label="chair", confidence=0.10, bbox=[0.1, 0.2, 0.3, 0.4]),
+        ]
+
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
+            event = MotionEvent("FEEDER", "Bird Feeder", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "bird"
+        assert result.objects[0].confidence == 0.0
+        # synthetic detection should NOT be in all_detections
+        assert len(result.all_detections) == 0
+
+    @pytest.mark.asyncio
+    async def test_default_label_not_injected_when_objects_found(self, sample_vision_config):
+        """default_label NOT injected when real objects survive filtering."""
+        sample_vision_config["cameras"] = {
+            "FEEDER": CameraConfig(default_label="bird", min_confidence={"person": 0.25}),
+        }
+        detector = FakeDetector(sample_vision_config)
+
+        raw_objects = [
+            DetectedObject(label="person", raw_label="person", confidence=0.80, bbox=[0.1, 0.2, 0.3, 0.4]),
+        ]
+
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
+            event = MotionEvent("FEEDER", "Bird Feeder", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "person"
+
+    @pytest.mark.asyncio
+    async def test_no_camera_override_uses_global(self, sample_vision_config):
+        """Unconfigured camera uses global min_confidence."""
+        sample_vision_config["min_confidence"] = 0.50
+        detector = FakeDetector(sample_vision_config)
+
+        raw_objects = [
+            DetectedObject(label="person", raw_label="person", confidence=0.48, bbox=[0.1, 0.2, 0.3, 0.4]),
+            DetectedObject(label="person", raw_label="person", confidence=0.55, bbox=[0.5, 0.6, 0.7, 0.8]),
+        ]
+
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
+            event = MotionEvent("UNKNOWN_CAM", "Unknown", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].confidence == 0.55
+
+    @pytest.mark.asyncio
+    async def test_feeder_mode_end_to_end(self, feeder_vision_config):
+        """Feeder mode: person at 0.76 filtered out, bird at 0.22 passes."""
+        detector = FakeDetector(feeder_vision_config)
+
+        raw_objects = [
+            DetectedObject(label="person", raw_label="person", confidence=0.76, bbox=[0.1, 0.2, 0.3, 0.4]),
+            DetectedObject(label="bird", raw_label="bird", confidence=0.22, bbox=[0.5, 0.6, 0.7, 0.8]),
+        ]
+
+        with patch.object(detector, "_detect_ultralytics", return_value=(raw_objects, "fake_b64")):
+            event = MotionEvent("FEEDER_CAM", "Bird Feeder", "ev1", _make_tiny_jpeg_b64(), "2026-01-01T00:00:00", "test")
+            result = await detector.detect_objects(event)
+
+        assert len(result.objects) == 1
+        assert result.objects[0].label == "bird"
+        assert result.objects[0].confidence == 0.22
