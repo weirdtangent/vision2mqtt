@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
-from mqtt_helper import ConfigError
 import os
 import pathlib
 import signal
 import threading
 from types import FrameType
 from typing import TYPE_CHECKING, Any, cast
+
+from mqtt_helper import ConfigError
 import yaml
 
 if TYPE_CHECKING:
