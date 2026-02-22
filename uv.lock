@@ -399,7 +399,7 @@ wheels = [
 [[package]]
 name = "json-logging-graystorm"
 version = "0.1.3"
-source = { git = "https://github.com/weirdtangent/json_logging.git?branch=main#5e245601ad2da7676a52281345e4040bb0281ffb" }
+source = { git = "https://github.com/weirdtangent/json-logging.git?rev=5e245601ad2da7676a52281345e4040bb0281ffb#5e245601ad2da7676a52281345e4040bb0281ffb" }
 
 [[package]]
 name = "kiwisolver"
@@ -667,8 +667,8 @@ wheels = [
 
 [[package]]
 name = "mqtt-helper-graystorm"
-version = "1.3.0"
-source = { git = "https://github.com/weirdtangent/mqtt-helper.git?branch=main#cfc9102de40f89ac8042523256eee36f09144a6c" }
+version = "0.1.0"
+source = { git = "https://github.com/weirdtangent/mqtt-helper.git?rev=04fb1daa7c2e98b7dfbc60948913aba153693801#04fb1daa7c2e98b7dfbc60948913aba153693801" }
 dependencies = [
     { name = "logging" },
     { name = "paho-mqtt" },
@@ -1586,8 +1586,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10.0" },
-    { name = "json-logging-graystorm", git = "https://github.com/weirdtangent/json_logging.git?branch=main" },
-    { name = "mqtt-helper-graystorm", git = "https://github.com/weirdtangent/mqtt-helper.git?branch=main" },
+    { name = "json-logging-graystorm", git = "https://github.com/weirdtangent/json-logging.git?rev=5e245601ad2da7676a52281345e4040bb0281ffb" },
+    { name = "mqtt-helper-graystorm", git = "https://github.com/weirdtangent/mqtt-helper.git?rev=04fb1daa7c2e98b7dfbc60948913aba153693801" },
     { name = "numpy", specifier = ">=2.0.0" },
     { name = "paho-mqtt", specifier = ">=2.1.0" },
     { name = "pillow", specifier = ">=11.0.0" },
