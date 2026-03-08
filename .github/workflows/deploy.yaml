@@ -53,6 +53,9 @@ jobs:
         run: |
           uv run mypy src/
 
+      - name: Pip-audit
+        run: uv run pip-audit
+
   test:
     name: Test
     runs-on: ubuntu-latest
