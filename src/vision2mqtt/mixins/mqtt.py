@@ -31,10 +31,10 @@ class MqttMixin(BaseMqttMixin):
             self.logger.warning(f"vision request missing required fields on {msg.topic}: {list(payload.keys())}")
             return
 
-        # reject oversized image payloads (~10MB decoded limit)
+        # reject non-string or oversized image payloads (~10MB decoded limit)
         max_image_b64_len = 15_000_000
-        if len(payload["image_b64"]) > max_image_b64_len:
-            self.logger.warning(f"image_b64 too large ({len(payload['image_b64'])} chars) on {msg.topic}, dropping")
+        if not isinstance(payload["image_b64"], str) or len(payload["image_b64"]) > max_image_b64_len:
+            self.logger.warning(f"invalid or oversized image_b64 on {msg.topic}, dropping")
             return
 
         event = MotionEvent(
