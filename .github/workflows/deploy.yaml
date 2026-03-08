@@ -53,6 +53,10 @@ jobs:
         run: |
           uv run mypy src/
 
+      - name: Pip-audit
+        if: matrix.python-version == '3.12'
+        run: uv run pip-audit
+
   test:
     name: Test
     runs-on: ubuntu-latest
