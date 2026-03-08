@@ -261,7 +261,7 @@ services:
       - TZ=America/New_York
       - LD_LIBRARY_PATH=/usr/lib/axcl
     healthcheck:
-      test: ["CMD", "python3", "/app/src/healthcheck.py"]
+      test: ["CMD", "python", "-m", "mqtt_helper.healthcheck"]
       interval: 60s
       timeout: 5s
       retries: 3
