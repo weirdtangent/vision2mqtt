@@ -64,7 +64,8 @@ RUN if [ "${ENABLE_NPU}" = "true" ]; then \
     fi
 
 # 7. Cleanup
-RUN rm -f /tmp/reqs.all.txt /tmp/reqs.deps.txt .git || true
+RUN apt-get purge -y git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && \
+    rm -f /tmp/reqs.all.txt /tmp/reqs.deps.txt .git || true
 
 # ===== Non-root Runtime User =====
 RUN groupadd -g "${GROUP_ID}" appuser && \
