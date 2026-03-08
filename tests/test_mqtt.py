@@ -135,6 +135,41 @@ class TestMqttOnMessage:
         assert mqtt.queue.qsize() == 3
 
 
+class TestMqttPayloadValidation:
+    @pytest.mark.asyncio
+    async def test_oversized_image_rejected(self, sample_vision_config):
+        mqtt = FakeMqtt(sample_vision_config)
+        payload = {**VALID_PAYLOAD, "image_b64": "A" * 16_000_000}
+        msg = _make_msg("test/topic", payload)
+
+        await mqtt.mqtt_on_message(None, None, msg)
+
+        assert mqtt.queue.qsize() == 0
+        mqtt.logger.warning.assert_called_once()
+        assert "invalid or oversized" in mqtt.logger.warning.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_non_string_image_rejected(self, sample_vision_config):
+        mqtt = FakeMqtt(sample_vision_config)
+        payload = {**VALID_PAYLOAD, "image_b64": 12345}
+        msg = _make_msg("test/topic", payload)
+
+        await mqtt.mqtt_on_message(None, None, msg)
+
+        assert mqtt.queue.qsize() == 0
+        mqtt.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_image_at_limit_accepted(self, sample_vision_config):
+        mqtt = FakeMqtt(sample_vision_config)
+        payload = {**VALID_PAYLOAD, "image_b64": "A" * 15_000_000}
+        msg = _make_msg("test/topic", payload)
+
+        await mqtt.mqtt_on_message(None, None, msg)
+
+        assert mqtt.queue.qsize() == 1
+
+
 class TestMqttQueueFull:
     @pytest.mark.asyncio
     async def test_drops_oldest_when_full(self, sample_vision_config):
