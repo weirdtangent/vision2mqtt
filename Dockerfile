@@ -66,7 +66,8 @@ RUN if [ "${ENABLE_NPU}" = "true" ]; then \
     fi
 
 # 7. Cleanup
-RUN apt-get purge -y git && apt-get autoremove -y && apt-get clean && \
+RUN /usr/local/bin/pip uninstall -y uv && \
+    apt-get purge -y git && apt-get autoremove -y && apt-get clean && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives && \
     (rm -rf /tmp/reqs.all.txt /tmp/reqs.deps.txt .git || true)
 
