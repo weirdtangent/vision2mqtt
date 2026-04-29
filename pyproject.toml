@@ -23,7 +23,7 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.42",
+    "ultralytics>=8.4.43",
 ]
 dev = [
     # linting/formatting
