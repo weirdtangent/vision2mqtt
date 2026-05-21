@@ -10,7 +10,7 @@ Designed to work with [amcrest2mqtt](https://github.com/weirdtangent/amcrest2mqt
 and [blink2mqtt](https://github.com/weirdtangent/blink2mqtt), but any MQTT client
 can publish vision requests in the expected format.
 
-> **v1.0.0** — Per-camera config overrides, composite detection (group, dog walker, cyclist), presence cooldown, system & NPU telemetry, and full Home Assistant MQTT discovery.
+**Features:** per-camera config overrides with mode presets (`feeder`, `baby`, `security`), composite detection (`group`, `dog_walker`, `cyclist`, `student`, `package_carrier`), presence cooldown, per-camera frequency sensors, system & NPU telemetry, annotated-image republishing, and full Home Assistant MQTT discovery.
 
 ## How It Works
 
@@ -117,6 +117,32 @@ When enabled via the `composites` config, vision2mqtt can detect higher-level sc
 
 Composites use **all detections** (pre-label-filter), so companion objects like `dog` or `bicycle` are detected even if they aren't in your `labels` list. Each composite is published as a retained `ON`/`OFF` presence topic and as a Home Assistant binary sensor when HA discovery is enabled.
 
+## Per-Camera Mode Presets
+
+Set `vision.cameras.<camera_id>.mode` to apply a preset that overrides confidence thresholds and the fallback label for that camera. Presets can be combined with explicit `min_confidence` keys, which take precedence over the preset.
+
+| Preset | What it does | Intended use |
+|--------|--------------|--------------|
+| `default` | No overrides — uses global `min_confidence` | Most cameras |
+| `feeder` | `person: 0.90`, `vehicle: 0.95`, `bird: 0.20`, `animal: 0.25`; `default_label: bird` | Bird-feeder cams — very strict on people/vehicles (almost certainly false positives), generous on birds, and any unclassified motion is recorded as a bird |
+| `baby` | `person: 0.25`, `vehicle: 0.99`, `bird: 0.99`, `animal: 0.80` | Indoor / nursery cams — very sensitive person detection, suppress outdoor labels that shouldn't fire indoors |
+| `security` | `person/vehicle/bird/animal: 0.25` | High-sensitivity cams (sheds, side gates) — accept anything plausible |
+
+Example:
+```yaml
+vision:
+  cameras:
+    "BIRD_FEEDER_CAM_ID":
+      mode: feeder
+    "SHED_CAM_ID":
+      mode: security
+    "BACK_DOOR_CAM_ID":
+      min_confidence:
+        person: 0.85
+        bird: 0.30
+      default_label: person
+```
+
 ## MQTT Topics
 
 ### Input (subscribed)
@@ -125,10 +151,22 @@ Composites use **all detections** (pre-label-filter), so companion objects like 
 
 ### Output (published)
 
+Per-event:
 - `vision2mqtt/{camera_id}/{event_id}/objects` — JSON array of detected objects
 - `vision2mqtt/{camera_id}/{event_id}/summary` — JSON summary with label counts and timing
-- `vision2mqtt/{camera_id}/presence/{label}` — retained `ON`/`OFF` per camera per label (optional)
-- `vision2mqtt/{camera_id}/presence/{composite}` — retained `ON`/`OFF` per camera per composite type (optional)
+- `vision2mqtt/{camera_id}/image/annotated` — base64-encoded JPEG with bboxes drawn (last frame, replaces on each event)
+
+Per-camera state (retained):
+- `vision2mqtt/{camera_id}/presence/{label}` — `ON`/`OFF` per label
+- `vision2mqtt/{camera_id}/presence/{composite}` — `ON`/`OFF` per composite type
+- `vision2mqtt/{camera_id}/sensor/object_count` — count from the most recent event
+- `vision2mqtt/{camera_id}/sensor/last_detection` — ISO timestamp of last event
+- `vision2mqtt/{camera_id}/sensor/processing_time` — last inference latency (ms)
+- `vision2mqtt/{camera_id}/sensor/camera_mode` — active mode preset name (`default`, `feeder`, etc.)
+- `vision2mqtt/{camera_id}/sensor/frequency/{label}` — detections of this label in the last `VISION_FREQUENCY_WINDOW` seconds (default 1h)
+- `vision2mqtt/{camera_id}/sensor/frequency/{composite}` — same, per composite
+
+When `home_assistant: true` (the default), discovery messages are also published so every camera and sensor above appears automatically in Home Assistant. Enabling HA discovery forces `retain_presence: true` so HA always has a current presence value at restart.
 
 ### System Telemetry (published every 60s)
 
@@ -194,6 +232,8 @@ COCO classes are simplified to categories useful for home security:
 ## Raspberry Pi 5 + M5Stack LLM-8850 Setup
 
 The `axcl` backend is specifically tested on a **Raspberry Pi 5** with the **[M5Stack LLM-8850 Pi HAT](https://docs.m5stack.com/en/ai_hardware/LLM-8850_Card)** kit (AXera AX8850 NPU, 24 TOPS @ INT8, 8GB LPDDR4x).
+
+> ⚠️ **Kernel compatibility:** the current `axclhost` DKMS package only builds on Linux kernel **6.12.x and earlier**. On kernel 6.18+, the build fails with `__DATE__`/`__TIME__` reproducible-builds errors and unresolved cross-module symbol references (`ax_pcie_spin_lock`). Pin the kernel meta-packages with `apt-mark hold linux-image-rpi-2712 linux-image-rpi-v8 linux-headers-rpi-2712 linux-headers-rpi-v8 raspi-firmware` until upstream fixes land. See the "Troubleshooting" notes at the end of this section.
 
 ### Quick start (fresh Debian 13 trixie or Raspberry Pi OS 64-bit Lite)
 
@@ -283,6 +323,30 @@ docker compose pull        # pull latest image
 docker compose up -d       # recreate container with new image
 docker image prune -f      # clean up old images
 ```
+
+### Troubleshooting
+
+**Container fails to start with `error gathering device information while adding custom device "/dev/axcl_host"`:**
+The NPU kernel modules aren't loaded. `lsmod | grep axcl` should list at least `axcl_host`, `ax_pcie_host_dev`, `ax_pcie_msg`, and `ax_pcie_mmb`. If empty, check `dmesg | grep ax_pcie` — `disagrees about version of symbol` means stale DKMS modules; rebuild with:
+```sh
+sudo dkms install axclhost/1.0 -k $(uname -r) --force
+sudo modprobe axcl_host ax_pcie_msg ax_pcie_mmb
+```
+
+**DKMS build fails with `__DATE__`/`__TIME__` errors or `modpost: "ax_pcie_spin_lock" undefined`:**
+You're on a kernel newer than 6.12.x. The axclhost driver source isn't compatible yet. To roll back to a 6.12.x kernel that's still installed:
+```sh
+sudo cp /boot/vmlinuz-6.12.75+rpt-rpi-2712 /boot/firmware/kernel_2712.img
+sudo cp /boot/vmlinuz-6.12.75+rpt-rpi-v8 /boot/firmware/kernel8.img
+sudo cp /boot/initrd.img-6.12.75+rpt-rpi-2712 /boot/firmware/initramfs_2712
+sudo cp /boot/initrd.img-6.12.75+rpt-rpi-v8 /boot/firmware/initramfs8
+sudo apt-mark hold linux-image-rpi-2712 linux-image-rpi-v8 linux-headers-rpi-2712 linux-headers-rpi-v8 raspi-firmware
+sudo reboot
+```
+After reboot, rebuild DKMS with the `--force` command above.
+
+**`axcl-smi` shows `open pci msg dev fail` but `/dev/axcl_host` exists:**
+The companion modules `ax_pcie_mmb` and `ax_pcie_msg` aren't loaded. They should be auto-loaded by `/etc/modules-load.d/axcl_pcie.conf`; if not, `sudo modprobe ax_pcie_mmb ax_pcie_msg`.
 
 ### Resources
 

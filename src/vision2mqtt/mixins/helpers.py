@@ -130,7 +130,7 @@ class HelpersMixin:
             "backend":           str(vision.get("backend")           or os.getenv("VISION_BACKEND", "ultralytics")),
             "model":             str(vision.get("model")             or os.getenv("VISION_MODEL", "yolo26n.pt")),
             "subscribe_topics":  list(vision.get("subscribe_topics") or ["+/vision/request"]),
-            "labels":            list(vision.get("labels")           or ["person", "vehicle", "animal", "bird"]),
+            "labels":            list(vision.get("labels")           or ["person", "vehicle", "animal", "bird", "package"]),
             "min_confidence": float(str(vision.get("min_confidence") or os.getenv("VISION_MIN_CONFIDENCE", "0.45"))),
             "concurrency":   int(str(vision.get("concurrency")      or os.getenv("VISION_CONCURRENCY", "1"))),
             "max_queue":     int(str(vision.get("max_queue")        or os.getenv("VISION_MAX_QUEUE", "20"))),
