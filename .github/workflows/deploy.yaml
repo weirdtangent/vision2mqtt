@@ -55,7 +55,29 @@ jobs:
 
       - name: Pip-audit
         if: matrix.python-version == '3.12'
-        run: uv run pip-audit --ignore-vuln CVE-2026-4539 --ignore-vuln CVE-2026-25645 --ignore-vuln CVE-2026-3219  # pygments 2.19.2 + requests 2.32.5 + pip 26.0.1, no fix available yet
+        # Ignored advisories — review each time the lockfile changes substantially (e.g. torch bump):
+        #   pygments/requests/pip: no fix available upstream yet
+        #   torch PYSEC-2025-189..197, 210, PYSEC-2026-139: OSV false positives;
+        #     all 11 advisories list torch 2.9.1 as their highest affected version,
+        #     but malformed OSV range events (introduced=0 with empty fixed event)
+        #     cause pip-audit to flag torch 2.10.0. Remove if torch is downgraded
+        #     below 2.10.0 or if OSV publishes corrected range data.
+        run: |
+          uv run pip-audit \
+            --ignore-vuln CVE-2026-4539 \
+            --ignore-vuln CVE-2026-25645 \
+            --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln PYSEC-2025-189 \
+            --ignore-vuln PYSEC-2025-190 \
+            --ignore-vuln PYSEC-2025-191 \
+            --ignore-vuln PYSEC-2025-192 \
+            --ignore-vuln PYSEC-2025-193 \
+            --ignore-vuln PYSEC-2025-194 \
+            --ignore-vuln PYSEC-2025-195 \
+            --ignore-vuln PYSEC-2025-196 \
+            --ignore-vuln PYSEC-2025-197 \
+            --ignore-vuln PYSEC-2025-210 \
+            --ignore-vuln PYSEC-2026-139
 
   test:
     name: Test
