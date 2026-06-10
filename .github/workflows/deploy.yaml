@@ -63,6 +63,7 @@ jobs:
         #     cause pip-audit to flag torch 2.10.0. Remove if torch is downgraded
         #     below 2.10.0 or if OSV publishes corrected range data.
         run: |
+          uv pip install --upgrade pip
           uv run pip-audit \
             --ignore-vuln CVE-2026-4539 \
             --ignore-vuln CVE-2026-25645 \
