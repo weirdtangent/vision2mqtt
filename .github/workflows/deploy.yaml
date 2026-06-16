@@ -62,11 +62,15 @@ jobs:
         #     but malformed OSV range events (introduced=0 with empty fixed event)
         #     cause pip-audit to flag torch 2.10.0. Remove if torch is downgraded
         #     below 2.10.0 or if OSV publishes corrected range data.
+        #   CVE-2025-3000 (GHSA-rrmf-rvhw-rf47): torch.jit.script memory
+        #     corruption, no upstream fix yet (vuln <=2.12.0, patched=null).
+        #     Re-evaluate when PyTorch publishes a patched release.
         run: |
           uv run pip-audit \
             --ignore-vuln CVE-2026-4539 \
             --ignore-vuln CVE-2026-25645 \
             --ignore-vuln CVE-2026-3219 \
+            --ignore-vuln CVE-2025-3000 \
             --ignore-vuln PYSEC-2026-196 \
             --ignore-vuln PYSEC-2025-189 \
             --ignore-vuln PYSEC-2025-190 \
