@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=82.0.1", "setuptools-scm>=10.0.5", "wheel"]
+requires = ["setuptools>=83.0.0", "setuptools-scm>=10.2.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,8 +11,8 @@ requires-python = ">=3.12"
 dependencies = [
     "paho-mqtt>=2.1.0",
     "pyyaml>=6.0.3",
-    "pillow>=12.2.0",
-    "numpy>=2.4.6",
+    "pillow>=12.3.0",
+    "numpy>=2.5.1",
     "psutil>=7.2.2",
     "json-logging-graystorm",
     "mqtt-helper-graystorm",
@@ -23,15 +23,15 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.70",
+    "ultralytics>=8.4.90",
 ]
 dev = [
     # linting/formatting
     "black>=26.5.1",
-    "ruff>=0.15.17",
+    "ruff>=0.15.20",
 
     # testing/coverage
-    "pytest>=9.1.0",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
 ]
@@ -137,8 +137,8 @@ mqtt-helper-graystorm = { git = "https://github.com/weirdtangent/mqtt-helper.git
 [dependency-groups]
 dev = [
     "black>=25.9.0",
-    "mypy>=2.1.0",
-    "pytest>=9.1.0",
+    "mypy>=2.2.0",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.14.1",
