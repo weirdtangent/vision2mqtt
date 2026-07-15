@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "paho-mqtt>=2.1.0",
     "pyyaml>=6.0.3",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
     "numpy>=2.4.6",
     "psutil>=7.2.2",
     "json-logging-graystorm",
@@ -129,6 +129,11 @@ extend-exclude = '''
  |build
 )/
 '''
+
+[tool.uv]
+# setuptools is pulled transitively by torch (linux-only) at 81.0.0, which has
+# PYSEC-2026-3447. Nothing requests a newer floor, so pin it above the fix here.
+constraint-dependencies = ["setuptools>=83.0.0"]
 
 [tool.uv.sources]
 json-logging-graystorm = { git = "https://github.com/weirdtangent/json-logging.git", rev = "5e245601ad2da7676a52281345e4040bb0281ffb" }
