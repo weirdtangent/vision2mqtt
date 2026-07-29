@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-import asyncio
 import argparse
+import asyncio
 import concurrent.futures
 import logging
+from types import TracebackType
+from typing import Any, Self, cast
+
 import psutil
 from json_logging import get_logger
 from mqtt_helper import MqttHelper
 from paho.mqtt.client import Client
-from types import TracebackType
-
-from typing import Any, Self, cast
 
 from vision2mqtt.interface import VisionServiceProtocol as Vision2Mqtt
 from vision2mqtt.mixins.presence import PresenceTracker

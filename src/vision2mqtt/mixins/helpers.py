@@ -10,8 +10,8 @@ import threading
 from types import FrameType
 from typing import TYPE_CHECKING, Any, cast
 
-from mqtt_helper import ConfigError
 import yaml
+from mqtt_helper import ConfigError
 
 from vision2mqtt.models.events import CameraConfig
 
@@ -160,9 +160,7 @@ class HelpersMixin:
             raw_conf = cam_raw.get("min_confidence")
             if raw_conf is not None:
                 if isinstance(raw_conf, dict):
-                    if merged_conf is None:
-                        merged_conf = {}
-                    elif isinstance(merged_conf, (int, float)):
+                    if merged_conf is None or isinstance(merged_conf, (int, float)):
                         merged_conf = {}
                     for k, v in raw_conf.items():
                         merged_conf[k] = float(v)

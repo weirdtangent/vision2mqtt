@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from vision2mqtt.mixins.labels import LABEL_ICONS, LABEL_PARENTS
@@ -203,7 +203,7 @@ class PublishMixin:
             return
 
         prefix = self.service
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/object_count", str(object_count))
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/last_detection", now_iso)
         await asyncio.to_thread(self.mqtt_helper.safe_publish, f"{prefix}/{camera_id}/sensor/processing_time", str(round(processing_time_ms, 1)))

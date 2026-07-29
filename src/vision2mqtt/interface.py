@@ -3,13 +3,15 @@
 import asyncio
 from argparse import Namespace
 from asyncio import AbstractEventLoop
+from collections.abc import Callable, Coroutine
 from logging import Logger
-from mqtt_helper import MqttHelper
-from paho.mqtt.client import Client, MQTTMessage, ConnectFlags, DisconnectFlags
-from paho.mqtt.reasoncodes import ReasonCode
-from paho.mqtt.properties import Properties
 from types import FrameType
-from typing import Protocol, Any, Callable, Coroutine, TypeVar
+from typing import Any, Protocol, TypeVar
+
+from mqtt_helper import MqttHelper
+from paho.mqtt.client import Client, ConnectFlags, DisconnectFlags, MQTTMessage
+from paho.mqtt.properties import Properties
+from paho.mqtt.reasoncodes import ReasonCode
 
 from vision2mqtt.mixins.presence import PresenceTracker
 from vision2mqtt.models.events import DetectedObject, MotionEvent, VisionResult
