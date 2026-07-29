@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=83.0.0", "setuptools-scm>=10.2.0", "wheel"]
+requires = ["setuptools>=83.0.0", "setuptools-scm>=10.2.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,12 +23,12 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.95",
+    "ultralytics>=8.4.110",
 ]
 dev = [
     # linting/formatting
     "black>=26.5.1",
-    "ruff>=0.15.21",
+    "ruff>=0.16.0",
 
     # testing/coverage
     "pytest>=9.1.1",
@@ -147,7 +147,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.14.1",
-    "types-pyyaml>=6.0.12.20260518",
+    "types-pyyaml>=6.0.12.20260724",
     "pip-audit>=2.10.1",
 ]
 
