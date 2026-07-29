@@ -16,7 +16,7 @@ class LoopsMixin:
         while self.running:
             try:
                 event = await asyncio.wait_for(self.queue.get(), timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 self.logger.debug(f"worker-{worker_id} cancelled")

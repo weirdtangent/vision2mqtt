@@ -83,6 +83,24 @@ indent-width = 4
 
 target-version = "py313"
 
+[tool.ruff.lint]
+# ruff 0.16.0 broadened its default rule set, newly flagging rules this
+# project never opted into. These are intentional or low-value for an MQTT
+# bridge (broad exception handling in callback loops, logging style,
+# subprocess calls), so keep them out of scope.
+ignore = [
+    "BLE001",   # blind `except Exception` — intentional in callback/loop handlers
+    "S110",     # try-except-pass — intentional best-effort cleanup
+    "PLW1510",  # subprocess.run without explicit check
+    "PLW1508",  # env var default type
+    "G201",     # logging .error(exc_info=True) vs .exception()
+    "TRY401",   # redundant exception object in logging.exception
+    "LOG015",   # call on root logger
+    "PERF102",  # dict .items() when only values used
+    "RUF012",   # mutable default for class attribute (no ClassVar)
+    "PYI036",   # __aexit__ argument annotations
+]
+
 [tool.pyright]
 include = [ "src" ]
 extraPaths = [ "src" ]

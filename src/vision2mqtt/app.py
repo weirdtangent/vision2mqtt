@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-import asyncio
 import argparse
-from json_logging import setup_logging, get_logger
+import asyncio
+
+from json_logging import get_logger, setup_logging
 from mqtt_helper import ConfigError, MqttError
+
 from .core import Vision2Mqtt
 
 

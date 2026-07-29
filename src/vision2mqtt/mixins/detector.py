@@ -483,7 +483,7 @@ class DetectorMixin:
         draw = ImageDraw.Draw(annotated)
         try:
             font: Any = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(12, img_h // 30))
-        except (OSError, IOError):
+        except OSError:
             font = ImageFont.load_default()
         for obj in objects:
             bx1 = int(obj.bbox[0] * img_w)
