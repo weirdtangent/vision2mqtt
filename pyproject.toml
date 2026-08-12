@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=83.0.0", "setuptools-scm>=10.2.1", "wheel"]
+requires = ["setuptools>=84.0.0", "setuptools-scm>=10.2.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,12 +23,12 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.115",
+    "ultralytics>=8.4.116",
 ]
 dev = [
     # linting/formatting
     "black>=26.5.1",
-    "ruff>=0.16.1",
+    "ruff>=0.16.2",
 
     # testing/coverage
     "pytest>=9.1.1",
@@ -151,7 +151,7 @@ extend-exclude = '''
 [tool.uv]
 # setuptools is pulled transitively by torch (linux-only) at 81.0.0, which has
 # PYSEC-2026-3447. Nothing requests a newer floor, so pin it above the fix here.
-constraint-dependencies = ["setuptools>=83.0.0"]
+constraint-dependencies = ["setuptools>=84.0.0"]
 
 [tool.uv.sources]
 json-logging-graystorm = { git = "https://github.com/weirdtangent/json-logging.git", rev = "5e245601ad2da7676a52281345e4040bb0281ffb" }
