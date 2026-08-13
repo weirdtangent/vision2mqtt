@@ -316,7 +316,7 @@ class PublishMixin:
         # publish camera sensor state for HA
         await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms)
 
-        self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): " f"{len(result.objects)} objects, {result.processing_time_ms}ms")
+        self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): {len(result.objects)} objects, {result.processing_time_ms}ms")
 
     async def check_presence_cooldowns(self: Vision2Mqtt) -> None:
         """Sweep expired presence keys and publish OFF + decayed frequency values.
