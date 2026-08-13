@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint (ruff/black/mypy)
+    name: Lint (ruff/mypy)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -44,10 +44,10 @@ jobs:
       - name: Ruff
         run: uv run ruff check src
 
-      - name: Black
+      - name: Format (ruff)
         run: |
-          uv run black --version
-          uv run black --check --color --diff --target-version py312 .
+          uv run ruff --version
+          uv run ruff format --check --diff .
 
       - name: Mypy
         run: |
