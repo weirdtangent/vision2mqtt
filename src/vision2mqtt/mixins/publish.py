@@ -15,6 +15,14 @@ if TYPE_CHECKING:
 
 
 class PublishMixin:
+    def discovery_topic(self: Vision2Mqtt, item: str) -> str:
+        """Bundled `device` discovery topic for the service ("service") or a camera (its id).
+
+        Shared by publish and clear so the two can never drift onto different topics.
+        """
+        discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
+        return f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{item}/config"
+
     async def publish_service_discovery(self: Vision2Mqtt) -> None:
         if not self.ha_enabled:
             return
@@ -51,8 +59,7 @@ class PublishMixin:
             },
         }
 
-        discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
-        topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{device_id}/config"
+        topic = self.discovery_topic(device_id)
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
         self.logger.debug(f"published HA service discovery to {topic}")
 
@@ -188,8 +195,7 @@ class PublishMixin:
             "cmps": cmps,
         }
 
-        discovery_prefix = self.mqtt_config.get("discovery_prefix", "homeassistant")
-        topic = f"{discovery_prefix}/device/{self.mqtt_helper.service_slug}_{camera_id}/config"
+        topic = self.discovery_topic(camera_id)
         await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
 
         # publish camera mode value
