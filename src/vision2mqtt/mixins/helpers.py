@@ -38,6 +38,26 @@ _CAMERA_MODE_PRESETS: dict[str, dict[str, Any]] = {
 
 
 class HelpersMixin:
+    async def clear_discovery(self: Vision2Mqtt) -> None:
+        """Delete every retained discovery topic we own, service device included.
+
+        The topic list comes from the broker rather than seen_cameras: this runs from
+        mqtt_on_connect, when no camera has reported yet, so seen_cameras is empty and every
+        per-camera topic would survive -- reducing a schema bump to an in-place update that cannot
+        dislodge a squatted entity_id.
+
+        Dropping seen_cameras is still what makes the republish work. Cameras are discovered lazily
+        on first detection (see publish_vision_result) and their display names only arrive with the
+        event, so there is nothing to replay here -- each re-announces itself on its next event.
+        """
+        await self.clear_retained_discovery()
+        async with self._camera_discovery_lock:
+            self.seen_cameras.clear()
+
+    async def rediscover_all(self: Vision2Mqtt) -> None:
+        await self.publish_service_discovery()
+        await self.publish_service_state()
+
     def mark_ready(self: Vision2Mqtt) -> None:
         pathlib.Path(READY_FILE).touch()
 

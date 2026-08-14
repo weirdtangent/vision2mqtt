@@ -15,6 +15,16 @@ if TYPE_CHECKING:
 
 
 class MqttMixin(BaseMqttMixin):
+    # Bump ONLY when the entity layout changes: unique_ids, entity names, or the set of components
+    # published. A bump clears retained discovery on next connect, which drops the entities from
+    # HA's registry -- losing renames, areas, and hidden/disabled flags -- before recreating them.
+    #
+    # There is deliberately no reset_discovery command here: this service subscribes only to vision
+    # request topics and has no command path, so the version gate is the whole mechanism.
+    #
+    # 1: baseline (2026-08) -- first version to carry a schema stamp
+    DISCOVERY_SCHEMA_VERSION = 1
+
     def mqtt_subscription_topics(self: Vision2Mqtt) -> list[str]:
         return list(self.vision_config["subscribe_topics"])
 
