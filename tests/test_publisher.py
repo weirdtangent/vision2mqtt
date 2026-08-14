@@ -718,3 +718,51 @@ class TestCameraModeDiscovery:
         mode_calls = [c for c in pub.mqtt_helper.safe_publish.call_args_list if c.args[0] == "vision2mqtt/FEEDER/sensor/camera_mode"]
         assert len(mode_calls) == 1
         assert mode_calls[0].args[1] == "feeder"
+
+
+class TestStableObjectIds:
+    """entity_id must be pinned to the component key, never the display name.
+
+    HA derives entity_id from the display name at first discovery and keeps it forever, keyed on
+    unique_id. Confirmed on a live install that clearing discovery and waiting 25s still restores
+    the same entity_id, so publishing obj_id at creation is the only point this can be fixed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_every_service_component_publishes_an_obj_id(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_service_discovery()
+
+        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])["cmps"]
+        missing = [k for k, c in cmps.items() if "obj_id" not in c]
+        assert missing == [], f"components without obj_id: {missing}"
+
+    @pytest.mark.asyncio
+    async def test_every_camera_component_publishes_an_obj_id(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("driveway", "Driveway Cam")
+
+        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])["cmps"]
+        missing = [k for k, c in cmps.items() if "obj_id" not in c]
+        assert missing == [], f"components without obj_id: {missing}"
+
+    @pytest.mark.asyncio
+    async def test_camera_obj_ids_resolve_against_the_camera_not_the_service(self, sample_vision_config):
+        """Camera components are built before their device block, so a naive backward scan
+        attributes them to the service device instead."""
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_camera_discovery("driveway", "Driveway Cam")
+
+        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])["cmps"]
+        for key, comp in cmps.items():
+            assert "vision2mqtt_service" not in comp["obj_id"], f"{key} resolved against the service device"
+            assert comp["obj_id"].startswith("driveway_cam"), f"{key} -> {comp['obj_id']}"
