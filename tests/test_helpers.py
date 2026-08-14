@@ -106,7 +106,7 @@ class TestLoadConfigDefaults:
         assert config["vision"]["backend"] == "ultralytics"
         assert config["vision"]["model"] == "yolo26n.pt"
         assert config["vision"]["subscribe_topics"] == ["+/vision/request"]
-        assert config["vision"]["labels"] == ["person", "vehicle", "animal", "bird"]
+        assert config["vision"]["labels"] == ["person", "vehicle", "animal", "bird", "package"]
         assert config["vision"]["min_confidence"] == 0.45
         assert config["vision"]["concurrency"] == 1
         assert config["vision"]["max_queue"] == 20
