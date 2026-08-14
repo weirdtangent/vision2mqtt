@@ -2,6 +2,7 @@
 # Copyright (c) 2025 Jeff Culverhouse
 """Tests for clearing/rebuilding HA discovery when the entity layout changes."""
 
+import re
 import asyncio
 
 import pytest
@@ -19,6 +20,7 @@ class FakeService(HelpersMixin, PublishMixin, MqttMixin):
         self.mqtt_config = {"discovery_prefix": "homeassistant"}
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
+        self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
         self.seen_cameras = set(cameras or [])
         self._camera_discovery_lock = asyncio.Lock()
         self.publish_service_discovery = AsyncMock()

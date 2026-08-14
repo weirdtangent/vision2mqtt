@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
+import re
 import asyncio
 import json
 import pytest
@@ -28,6 +29,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.safe_publish = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
+        self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
         self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
         self.mqtt_helper.dev_unique_id = MagicMock(side_effect=lambda d, e: f"vision2mqtt_{d}_{e}")
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
