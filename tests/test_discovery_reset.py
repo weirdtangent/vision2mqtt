@@ -45,21 +45,37 @@ class TestDiscoveryTopic:
 
 class TestClearDiscovery:
     @pytest.mark.asyncio
-    async def test_clears_service_and_every_seen_camera(self):
-        svc = FakeService(cameras=["driveway", "porch"])
+    async def test_delegates_to_the_broker_sweep(self):
+        """seen_cameras is empty at connect time, so the topic list must come from the broker."""
+        svc = FakeService()
+        svc.clear_retained_discovery = AsyncMock()
+
+        await svc.clear_discovery()
+
+        svc.clear_retained_discovery.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_clears_camera_topics_no_camera_has_reported_yet(self):
+        svc = FakeService()  # no camera has sent an event, exactly as at mqtt_on_connect
+        svc.collect_retained_discovery_topics = AsyncMock(
+            return_value=[
+                "homeassistant/device/vision2mqtt_driveway/config",
+                "homeassistant/device/vision2mqtt_service/config",
+            ]
+        )
 
         await svc.clear_discovery()
 
         assert _cleared_topics(svc) == [
-            "homeassistant/device/vision2mqtt_service/config",
             "homeassistant/device/vision2mqtt_driveway/config",
-            "homeassistant/device/vision2mqtt_porch/config",
+            "homeassistant/device/vision2mqtt_service/config",
         ]
 
     @pytest.mark.asyncio
     async def test_clears_with_empty_payload_retained(self):
         """An empty payload removes the registry entry; None would publish the string "null"."""
-        svc = FakeService(cameras=["driveway"])
+        svc = FakeService()
+        svc.collect_retained_discovery_topics = AsyncMock(return_value=["homeassistant/device/vision2mqtt_service/config"])
 
         await svc.clear_discovery()
 
@@ -70,23 +86,17 @@ class TestClearDiscovery:
     @pytest.mark.asyncio
     async def test_forgets_seen_cameras_so_they_re_announce(self):
         svc = FakeService(cameras=["driveway", "porch"])
+        svc.clear_retained_discovery = AsyncMock()
 
         await svc.clear_discovery()
 
         assert svc.seen_cameras == set()
 
     @pytest.mark.asyncio
-    async def test_service_only_when_no_camera_has_reported(self):
-        svc = FakeService()
-
-        await svc.clear_discovery()
-
-        assert _cleared_topics(svc) == ["homeassistant/device/vision2mqtt_service/config"]
-
-    @pytest.mark.asyncio
     async def test_releases_the_camera_discovery_lock(self):
         """publish_vision_result takes the same lock; holding it would wedge every worker."""
         svc = FakeService(cameras=["driveway"])
+        svc.clear_retained_discovery = AsyncMock()
 
         await svc.clear_discovery()
 
