@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
+import re
 import pytest
 from unittest.mock import MagicMock, patch, mock_open
 
@@ -18,6 +19,7 @@ class FakeStatsPublisher(SystemStatsMixin):
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.safe_publish = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
+        self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
         self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
         self._axcl_smi_path = axcl_smi_path
 

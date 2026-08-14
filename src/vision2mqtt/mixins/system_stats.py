@@ -183,6 +183,7 @@ class SystemStatsMixin:
                 "p": "sensor",
                 "name": desc.name,
                 "uniq_id": self.mqtt_helper.svc_unique_id(f"telemetry_{desc.key}"),
+                "obj_id": self.mqtt_helper.obj_id(self.service_name, f"telemetry_{desc.key}"),
                 "stat_t": f"{self.service}/service/telemetry/{desc.key}",
                 "entity_category": "diagnostic",
                 "icon": desc.icon,
