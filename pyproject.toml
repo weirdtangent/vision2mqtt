@@ -12,7 +12,7 @@ dependencies = [
     "paho-mqtt>=2.1.0",
     "pyyaml>=6.0.3",
     "pillow>=12.3.0",
-    "numpy>=2.5.1",
+    "numpy>=2.5.2",
     "psutil>=7.2.2",
     "json-logging-graystorm",
     "mqtt-helper-graystorm",
@@ -23,11 +23,11 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.116",
+    "ultralytics>=8.4.120",
 ]
 dev = [
     # linting/formatting
-    "ruff>=0.16.2",
+    "ruff>=0.16.3",
 
     # testing/coverage
     "pytest>=9.1.1",
@@ -144,12 +144,12 @@ mqtt-helper-graystorm = { git = "https://github.com/weirdtangent/mqtt-helper.git
 
 [dependency-groups]
 dev = [
-    "mypy>=2.3.0",
+    "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.2",
-    "types-pyyaml>=6.0.12.20260724",
+    "ruff>=0.16.3",
+    "types-pyyaml>=6.0.12.20260815",
     "pip-audit>=2.10.1",
 ]
 
