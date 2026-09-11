@@ -7,6 +7,7 @@ import re
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mqtt_helper import MqttHelper
 
 from vision2mqtt.mixins.helpers import HelpersMixin
 from vision2mqtt.mixins.mqtt import MqttMixin
@@ -21,6 +22,8 @@ class FakeService(HelpersMixin, PublishMixin, MqttMixin):
         self.mqtt_helper = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
         self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
+        # the real rewrite -- this is the step HA's entity_ids depend on, so it must not be a stub
+        self.mqtt_helper.apply_default_entity_ids = MagicMock(side_effect=MqttHelper("vision2mqtt").apply_default_entity_ids)
         self.seen_cameras = set(cameras or [])
         self._camera_discovery_lock = asyncio.Lock()
         self.publish_service_discovery = AsyncMock()

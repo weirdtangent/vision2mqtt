@@ -6,6 +6,7 @@ import re
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mqtt_helper import MqttHelper
 
 from vision2mqtt.mixins.composites import CompositesMixin
 from vision2mqtt.mixins.helpers import HelpersMixin
@@ -31,6 +32,8 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.mqtt_helper.safe_publish = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
         self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
+        # the real rewrite -- this is the step HA's entity_ids depend on, so it must not be a stub
+        self.mqtt_helper.apply_default_entity_ids = MagicMock(side_effect=MqttHelper("vision2mqtt").apply_default_entity_ids)
         self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
         self.mqtt_helper.dev_unique_id = MagicMock(side_effect=lambda d, e: f"vision2mqtt_{d}_{e}")
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
@@ -726,44 +729,68 @@ class TestStableObjectIds:
 
     HA derives entity_id from the display name at first discovery and keeps it forever, keyed on
     unique_id. Confirmed on a live install that clearing discovery and waiting 25s still restores
-    the same entity_id, so publishing obj_id at creation is the only point this can be fixed.
+    the same entity_id, so publishing the default entity_id at creation is the only point this can
+    be fixed.
+
+    HA Core 2026.4 removed `object_id`; `default_entity_id` (`def_ent_id`) replaced it and wants a
+    full entity_id. A payload still publishing `obj_id` is ignored outright, putting newly
+    discovered entities straight back into the display-name failure above.
     """
 
-    @pytest.mark.asyncio
-    async def test_every_service_component_publishes_an_obj_id(self, sample_vision_config):
-        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+    async def _publish_service(self, config):
+        pub = FakePublisher(config, ha_enabled=True)
 
         with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_service_discovery()
 
-        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])["cmps"]
-        missing = [k for k, c in cmps.items() if "obj_id" not in c]
-        assert missing == [], f"components without obj_id: {missing}"
+        return json.loads(pub.mqtt_helper.safe_publish.call_args.args[1])["cmps"]
 
-    @pytest.mark.asyncio
-    async def test_every_camera_component_publishes_an_obj_id(self, sample_vision_config):
-        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+    async def _publish_camera(self, config):
+        pub = FakePublisher(config, ha_enabled=True)
 
         with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
             mock_asyncio.to_thread = _fake_to_thread
             await pub.publish_camera_discovery("driveway", "Driveway Cam")
 
-        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])["cmps"]
-        missing = [k for k, c in cmps.items() if "obj_id" not in c]
-        assert missing == [], f"components without obj_id: {missing}"
+        return json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])["cmps"]
 
     @pytest.mark.asyncio
-    async def test_camera_obj_ids_resolve_against_the_camera_not_the_service(self, sample_vision_config):
+    async def test_every_service_component_publishes_a_def_ent_id(self, sample_vision_config):
+        cmps = await self._publish_service(sample_vision_config)
+
+        missing = [k for k, c in cmps.items() if "def_ent_id" not in c]
+        assert missing == [], f"components without def_ent_id: {missing}"
+
+    @pytest.mark.asyncio
+    async def test_every_camera_component_publishes_a_def_ent_id(self, sample_vision_config):
+        cmps = await self._publish_camera(sample_vision_config)
+
+        missing = [k for k, c in cmps.items() if "def_ent_id" not in c]
+        assert missing == [], f"components without def_ent_id: {missing}"
+
+    @pytest.mark.asyncio
+    async def test_no_component_still_publishes_the_removed_obj_id(self, sample_vision_config):
+        """HA 2026.4+ does not recognise obj_id, so shipping one is dead weight and a false signal."""
+        for cmps in (await self._publish_service(sample_vision_config), await self._publish_camera(sample_vision_config)):
+            stale = [k for k, c in cmps.items() if "obj_id" in c]
+            assert stale == [], f"components still publishing obj_id: {stale}"
+
+    @pytest.mark.asyncio
+    async def test_def_ent_id_is_a_full_entity_id_in_the_components_own_domain(self, sample_vision_config):
+        """A bare slug is silently ignored -- HA partitions on the dot to find the object_id."""
+        cmps = await self._publish_service(sample_vision_config)
+
+        for key, comp in cmps.items():
+            assert comp["def_ent_id"].startswith(f"{comp['p']}."), f"{key} -> {comp['def_ent_id']}"
+
+    @pytest.mark.asyncio
+    async def test_camera_entity_ids_resolve_against_the_camera_not_the_service(self, sample_vision_config):
         """Camera components are built before their device block, so a naive backward scan
         attributes them to the service device instead."""
-        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        cmps = await self._publish_camera(sample_vision_config)
 
-        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
-            mock_asyncio.to_thread = _fake_to_thread
-            await pub.publish_camera_discovery("driveway", "Driveway Cam")
-
-        cmps = json.loads(pub.mqtt_helper.safe_publish.call_args_list[0].args[1])["cmps"]
         for key, comp in cmps.items():
-            assert "vision2mqtt_service" not in comp["obj_id"], f"{key} resolved against the service device"
-            assert comp["obj_id"].startswith("driveway_cam"), f"{key} -> {comp['obj_id']}"
+            _, _, object_id = comp["def_ent_id"].partition(".")
+            assert "vision2mqtt_service" not in object_id, f"{key} resolved against the service device"
+            assert object_id.startswith("driveway_cam"), f"{key} -> {comp['def_ent_id']}"
