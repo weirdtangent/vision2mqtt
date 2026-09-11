@@ -2,8 +2,9 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import asyncio
 import json
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from vision2mqtt.mixins.mqtt import MqttMixin
 from vision2mqtt.models.events import MotionEvent

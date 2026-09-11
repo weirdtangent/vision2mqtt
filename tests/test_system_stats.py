@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
 import re
-import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
-from vision2mqtt.mixins.system_stats import SystemStatsMixin, HOST_SENSORS, NPU_SENSORS
+import pytest
+
+from vision2mqtt.mixins.system_stats import HOST_SENSORS, NPU_SENSORS, SystemStatsMixin
 
 
 class FakeStatsPublisher(SystemStatsMixin):

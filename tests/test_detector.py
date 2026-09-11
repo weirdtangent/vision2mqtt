@@ -2,10 +2,10 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import base64
 import io
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch
 
 from vision2mqtt.mixins.detector import DetectorMixin
 from vision2mqtt.mixins.helpers import HelpersMixin
@@ -176,7 +176,7 @@ class TestPostprocessYoloRaw:
             head2[0, 1, 1, c * 16 + 12] = 10.0
 
         result = DetectorMixin._postprocess_yolo_raw([head1, head2], input_size=640, num_classes=80)
-        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        classes = {int(r[5]) for r in result if r[4] > 0.9}
         assert 0 in classes  # person from head1
         assert 2 in classes  # car from head2
 
@@ -346,7 +346,7 @@ class TestPostprocessYolo26:
         head2[0, 1, 1, 0:4] = 0.5
 
         result = DetectorMixin._postprocess_yolo_raw([head1, head2], input_size=640, num_classes=80)
-        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        classes = {int(r[5]) for r in result if r[4] > 0.9}
         assert 0 in classes  # person from head1
         assert 2 in classes  # car from head2
 
@@ -363,7 +363,7 @@ class TestPostprocessYolo26:
         head_direct[0, 1, 1, 0:4] = 0.5
 
         result = DetectorMixin._postprocess_yolo_raw([head_dfl, head_direct], input_size=640, num_classes=80)
-        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        classes = {int(r[5]) for r in result if r[4] > 0.9}
         assert 0 in classes  # person from DFL head
         assert 2 in classes  # car from direct head
 
@@ -390,7 +390,7 @@ class TestPostprocessYolo26:
 
         outputs = [bbox_8, cls_8, bbox_4, cls_4, bbox_2, cls_2]
         result = DetectorMixin._postprocess_yolo_raw(outputs, input_size=640, num_classes=80)
-        classes = set(int(r[5]) for r in result if r[4] > 0.9)
+        classes = {int(r[5]) for r in result if r[4] > 0.9}
         assert 0 in classes  # person
         assert 2 in classes  # car
 
