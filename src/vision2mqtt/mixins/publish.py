@@ -61,7 +61,7 @@ class PublishMixin:
         }
 
         topic = self.discovery_topic(device_id)
-        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(self.mqtt_helper.apply_default_entity_ids(device)))
         self.logger.debug(f"published HA service discovery to {topic}")
 
     async def publish_service_availability(self: Vision2Mqtt, status: str = "online") -> None:
@@ -206,7 +206,7 @@ class PublishMixin:
         }
 
         topic = self.discovery_topic(camera_id)
-        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(device))
+        await asyncio.to_thread(self.mqtt_helper.safe_publish, topic, json.dumps(self.mqtt_helper.apply_default_entity_ids(device)))
 
         # publish camera mode value
         mode = self._get_camera_mode(camera_id)

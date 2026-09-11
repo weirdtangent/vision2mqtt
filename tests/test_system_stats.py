@@ -4,6 +4,7 @@ import re
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from mqtt_helper import MqttHelper
 
 from vision2mqtt.mixins.system_stats import HOST_SENSORS, NPU_SENSORS, SystemStatsMixin
 
@@ -21,6 +22,8 @@ class FakeStatsPublisher(SystemStatsMixin):
         self.mqtt_helper.safe_publish = MagicMock()
         self.mqtt_helper.service_slug = "vision2mqtt"
         self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
+        # the real rewrite -- this is the step HA's entity_ids depend on, so it must not be a stub
+        self.mqtt_helper.apply_default_entity_ids = MagicMock(side_effect=MqttHelper("vision2mqtt").apply_default_entity_ids)
         self.mqtt_helper.svc_unique_id = MagicMock(side_effect=lambda e: f"vision2mqtt_{e}")
         self._axcl_smi_path = axcl_smi_path
 
