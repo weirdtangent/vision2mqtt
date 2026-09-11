@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-import re
 import asyncio
 import json
-import pytest
+import re
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from vision2mqtt.mixins.composites import CompositesMixin
 from vision2mqtt.mixins.helpers import HelpersMixin
 from vision2mqtt.mixins.presence import PresenceTracker
-from vision2mqtt.mixins.system_stats import SystemStatsMixin
 from vision2mqtt.mixins.publish import PublishMixin
+from vision2mqtt.mixins.system_stats import SystemStatsMixin
 from vision2mqtt.models.events import CameraConfig, DetectedObject, MotionEvent, VisionResult
 
 

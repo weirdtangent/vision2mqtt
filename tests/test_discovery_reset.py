@@ -2,11 +2,11 @@
 # Copyright (c) 2025 Jeff Culverhouse
 """Tests for clearing/rebuilding HA discovery when the entity layout changes."""
 
-import re
 import asyncio
+import re
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from vision2mqtt.mixins.helpers import HelpersMixin
 from vision2mqtt.mixins.mqtt import MqttMixin

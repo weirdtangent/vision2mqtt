@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 Jeff Culverhouse
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mqtt_helper import ConfigError
 
-from vision2mqtt.mixins.helpers import HelpersMixin, _CAMERA_MODE_PRESETS
+from vision2mqtt.mixins.helpers import _CAMERA_MODE_PRESETS, HelpersMixin
 from vision2mqtt.mixins.labels import LabelsMixin
 from vision2mqtt.models.events import CameraConfig
 
