@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +26,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.ha_enabled = ha_enabled
         self.seen_cameras: dict[str, str] = {}
         self.images_annotated: int = 0
+        self.images_annotated_date = datetime.now(UTC).astimezone()
         self._images_annotated_lock = asyncio.Lock()
         self._camera_discovery_lock = asyncio.Lock()
         self.config = {"version": "v0.1.0-test"}
@@ -351,6 +353,41 @@ class TestImagesAnnotatedCounter:
             )
 
         assert pub.images_annotated == 1
+
+
+class TestImagesAnnotatedDailyRollover:
+    """The counter is "today", not a lifetime total -- a monotonic number reads as meaningless
+    at a glance. state_class stays total_increasing, which handles the daily reset."""
+
+    @pytest.mark.asyncio
+    async def test_resets_when_the_date_changes(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        pub.images_annotated = 412
+        pub.images_annotated_date = datetime.now(UTC).astimezone() - timedelta(days=1)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(
+                MotionEvent("cam1", "Front Left", "ev1", "", "2026-02-14T15:30:45", "test"),
+                VisionResult(objects=[], processing_time_ms=5.0),
+            )
+
+        assert pub.images_annotated == 1, "yesterday's total must not carry forward"
+
+    @pytest.mark.asyncio
+    async def test_accumulates_within_the_same_day(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        pub.images_annotated = 412
+        pub.images_annotated_date = datetime.now(UTC).astimezone()
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(
+                MotionEvent("cam1", "Front Left", "ev1", "", "2026-02-14T15:30:45", "test"),
+                VisionResult(objects=[], processing_time_ms=5.0),
+            )
+
+        assert pub.images_annotated == 413
 
 
 class TestCameraDiscovery:

@@ -186,14 +186,20 @@ Plus a throughput counter, published on every detector result and republished on
 
 | Topic suffix | Metric | Unit |
 |-------------|--------|------|
-| `service/images_annotated` | Frames run through the detector since start | images |
+| `service/images_annotated` | Frames run through the detector **today** | images |
 
 `images_annotated` counts frames **processed**, not detections found — a pipeline running 500
 empty frames a day is healthy, one running zero is not, and only this number tells them apart.
-It is published as `state_class: total_increasing`, so Home Assistant derives 24h/7d throughput
-from long-term statistics and treats the reset to 0 on restart as a new cycle rather than a spike.
-The topic is retained, so it is republished on every connect to make a restart visible
-immediately rather than leaving the previous run's total on display.
+
+It **rolls over at local midnight**, matching amcrest2mqtt's `api_calls`: a monotonic lifetime
+total reads as a meaningless large number, whereas "today" is useful at a glance. `state_class`
+is still `total_increasing`, so Home Assistant handles the daily reset and continues to derive
+correct 24h/7d statistics from it.
+
+Today's count is persisted to `<config_path>/vision2mqtt.dat` and restored at startup, so a
+restart mid-day does not zero a number the user reads as "today". A stored count from a previous
+day is discarded rather than carried forward. The topic is retained and republished on every
+connect.
 
 NPU metrics are published when `axcl-smi` is available in the container (mount `/usr/bin/axcl`):
 
