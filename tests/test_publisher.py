@@ -24,6 +24,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.qos = 0
         self.ha_enabled = ha_enabled
         self.seen_cameras: dict[str, str] = {}
+        self.images_annotated: int = 0
         self._camera_discovery_lock = asyncio.Lock()
         self.config = {"version": "v0.1.0-test"}
         self.mqtt_config = {"discovery_prefix": "homeassistant"}
@@ -237,6 +238,40 @@ class TestServiceDiscovery:
             await pub.publish_service_discovery()
 
         pub.mqtt_helper.safe_publish.assert_not_called()
+
+
+class TestImagesAnnotatedCounter:
+    """Throughput counter: the one number that says the pipeline is alive regardless of whether
+    any individual camera happens to be detecting anything."""
+
+    @pytest.mark.asyncio
+    async def test_increments_and_publishes_per_result(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        result = VisionResult(objects=[], processing_time_ms=5.0)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            for n in (1, 2, 3):
+                await pub.publish_vision_result(MotionEvent("cam1", "Front Left", f"ev{n}", "", "2026-02-14T15:30:45", "test"), result)
+
+        assert pub.images_annotated == 3
+        pubs = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "images_annotated" in c.args[0]]
+        assert [c.args[1] for c in pubs] == ["1", "2", "3"]
+
+    @pytest.mark.asyncio
+    async def test_counts_frames_with_no_objects(self, sample_vision_config):
+        """A pipeline processing empty frames is healthy; one processing none is not. The counter
+        must reflect frames RUN, not detections found."""
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(
+                MotionEvent("cam1", "Front Left", "ev1", "", "2026-02-14T15:30:45", "test"),
+                VisionResult(objects=[], processing_time_ms=5.0),
+            )
+
+        assert pub.images_annotated == 1
 
 
 class TestCameraDiscovery:

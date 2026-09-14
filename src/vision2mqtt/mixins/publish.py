@@ -56,6 +56,17 @@ class PublishMixin:
                     "entity_category": "diagnostic",
                     "icon": "mdi:eye",
                 },
+                "images_annotated": {
+                    "p": "sensor",
+                    "name": "Images annotated",
+                    "uniq_id": self.mqtt_helper.svc_unique_id("images_annotated"),
+                    "obj_id": self.mqtt_helper.obj_id(self.service_name, "images_annotated"),
+                    "stat_t": self.mqtt_helper.stat_t(device_id, "service", "images_annotated"),
+                    "unit_of_measurement": "images",
+                    "state_class": "total_increasing",
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:image-multiple",
+                },
                 "reset_discovery": {
                     "p": "button",
                     "name": "Reset discovery",
@@ -346,6 +357,15 @@ class PublishMixin:
 
         # publish camera sensor state for HA
         await self.publish_camera_state(event.camera_id, len(result.objects), result.processing_time_ms)
+
+        # Count every frame the detector ran, not just ones that found something -- a pipeline
+        # processing 500 empty frames a day is healthy, and one processing zero is not.
+        self.images_annotated += 1
+        await asyncio.to_thread(
+            self.mqtt_helper.safe_publish,
+            self.mqtt_helper.stat_t("service", "service", "images_annotated"),
+            str(self.images_annotated),
+        )
 
         self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): {len(result.objects)} objects, {result.processing_time_ms}ms")
 
