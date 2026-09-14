@@ -54,6 +54,13 @@ class HelpersMixin:
         async with self._camera_discovery_lock:
             self.seen_cameras.clear()
 
+    async def handle_service_command(self: Vision2Mqtt, handler: str, message: Any) -> None:
+        """Route a service-level MQTT command. Currently only the reset_discovery button."""
+        if handler == "reset_discovery":
+            await self.reset_discovery(reason="requested over MQTT")
+            return
+        self.logger.warning(f"unknown service command '{handler}'")
+
     async def rediscover_all(self: Vision2Mqtt) -> None:
         await self.publish_service_discovery()
         await self.publish_service_state()

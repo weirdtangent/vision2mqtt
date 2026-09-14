@@ -56,6 +56,15 @@ class PublishMixin:
                     "entity_category": "diagnostic",
                     "icon": "mdi:eye",
                 },
+                "reset_discovery": {
+                    "p": "button",
+                    "name": "Reset discovery",
+                    "uniq_id": self.mqtt_helper.svc_unique_id("reset_discovery"),
+                    "obj_id": self.mqtt_helper.obj_id(self.service_name, "reset_discovery"),
+                    "cmd_t": self.mqtt_helper.cmd_t(device_id, "reset_discovery"),
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:refresh-circle",
+                },
                 **self.build_system_stats_components(),
             },
         }
@@ -229,16 +238,22 @@ class PublishMixin:
     async def publish_vision_result(self: Vision2Mqtt, event: MotionEvent, result: VisionResult) -> None:
         prefix = self.service
 
-        # lazy camera discovery on first detection (lock guards concurrent workers)
-        if self.ha_enabled and event.camera_id not in self.seen_cameras:
+        # Lazy camera discovery on first detection, and again whenever the display name changes
+        # (lock guards concurrent workers). Cameras get renamed upstream -- amcrest2mqtt and
+        # blink2mqtt both report the new name immediately -- but discovery used to be published
+        # once and never revisited, so HA kept showing a name the camera had not had for months.
+        if self.ha_enabled and self.seen_cameras.get(event.camera_id) != event.camera_name:
             async with self._camera_discovery_lock:
-                if event.camera_id not in self.seen_cameras:
+                previous = self.seen_cameras.get(event.camera_id)
+                if previous != event.camera_name:
                     try:
                         await self.publish_camera_discovery(event.camera_id, event.camera_name)
                     except Exception:
                         self.logger.exception("Failed to publish camera discovery for '%s'", event.camera_id)
                     else:
-                        self.seen_cameras.add(event.camera_id)
+                        if previous is not None:
+                            self.logger.info(f"camera '{event.camera_id}' renamed '{previous}' -> '{event.camera_name}', republished discovery")
+                        self.seen_cameras[event.camera_id] = event.camera_name
 
         # publish objects list
         objects_topic = f"{prefix}/{event.camera_id}/{event.event_id}/objects"

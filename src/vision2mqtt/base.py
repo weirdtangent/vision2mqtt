@@ -53,7 +53,9 @@ class Base:
         self.client_id = self.mqtt_helper.client_id()
 
         self.ha_enabled: bool = self.config.get("home_assistant", True)
-        self.seen_cameras: set[str] = set()
+        # camera_id -> the display name we last published discovery with. Keyed on the id so a
+        # rename is detected and re-announced; a bare set froze the name at first detection.
+        self.seen_cameras: dict[str, str] = {}
         self._camera_discovery_lock = asyncio.Lock()
 
         self._presence_tracker = PresenceTracker()

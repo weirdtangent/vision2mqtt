@@ -24,7 +24,7 @@ class FakeService(HelpersMixin, PublishMixin, MqttMixin):
         self.mqtt_helper.obj_id = MagicMock(side_effect=lambda dev, e="": re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", f"{dev} {e}".lower())).strip("_"))
         # the real rewrite -- this is the step HA's entity_ids depend on, so it must not be a stub
         self.mqtt_helper.apply_default_entity_ids = MagicMock(side_effect=MqttHelper("vision2mqtt").apply_default_entity_ids)
-        self.seen_cameras = set(cameras or [])
+        self.seen_cameras = dict.fromkeys(cameras or [], "name")
         self._camera_discovery_lock = asyncio.Lock()
         self.publish_service_discovery = AsyncMock()
         self.publish_service_state = AsyncMock()
@@ -95,7 +95,7 @@ class TestClearDiscovery:
 
         await svc.clear_discovery()
 
-        assert svc.seen_cameras == set()
+        assert svc.seen_cameras == {}
 
     @pytest.mark.asyncio
     async def test_releases_the_camera_discovery_lock(self):

@@ -19,16 +19,28 @@ class MqttMixin(BaseMqttMixin):
     # published. A bump clears retained discovery on next connect, which drops the entities from
     # HA's registry -- losing renames, areas, and hidden/disabled flags -- before recreating them.
     #
-    # There is deliberately no reset_discovery command here: this service subscribes only to vision
-    # request topics and has no command path, so the version gate is the whole mechanism.
+    # A reset_discovery button is published alongside the version gate. The gate alone cannot
+    # recover from a name or layout change that HA has already pinned (entity_ids are assigned at
+    # first discovery and never reassigned), so an operator needs a way to force a clean rebuild.
     #
     # 1: baseline (2026-08) -- first version to carry a schema stamp
     DISCOVERY_SCHEMA_VERSION = 1
 
     def mqtt_subscription_topics(self: Vision2Mqtt) -> list[str]:
-        return list(self.vision_config["subscribe_topics"])
+        # Vision request topics are configured; the service command topic is ours and is added
+        # unconditionally so the reset button works regardless of subscribe_topics.
+        return [
+            *self.vision_config["subscribe_topics"],
+            f"{self.mqtt_helper.service_slug}/service/+/command",
+        ]
 
     async def mqtt_on_message(self: Vision2Mqtt, client: Client, userdata: Any, msg: MQTTMessage) -> None:
+        # Service commands are plain strings, not vision-request JSON -- route them before the
+        # payload is parsed, or every button press logs a decode warning.
+        if msg.topic.startswith(f"{self.mqtt_helper.service_slug}/service/"):
+            await self.handle_service_command(msg.topic.rsplit("/", 2)[-2], msg.payload)
+            return
+
         try:
             payload = json.loads(msg.payload)
         except (json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError):
