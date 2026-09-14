@@ -33,6 +33,8 @@ class VisionServiceProtocol(Protocol):
     queue: asyncio.Queue[MotionEvent]
     running: bool
     seen_cameras: dict[str, str]
+    images_annotated: int
+    _images_annotated_lock: asyncio.Lock
     _camera_discovery_lock: asyncio.Lock
     service_name: str
     service: str

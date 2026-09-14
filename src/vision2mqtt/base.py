@@ -56,6 +56,15 @@ class Base:
         # camera_id -> the display name we last published discovery with. Keyed on the id so a
         # rename is detected and re-announced; a bare set froze the name at first detection.
         self.seen_cameras: dict[str, str] = {}
+        # Total frames run through the detector since start. Published with
+        # state_class total_increasing, so HA derives 24h/7d throughput from long-term
+        # statistics and handles the reset-to-0 on restart by itself -- no persistence needed.
+        self.images_annotated: int = 0
+        # Serialises increment+publish. With vision.concurrency > 1 the workers each await
+        # inside the publish, so without this the executor can deliver "2" before "1" -- and
+        # because the topic is RETAINED, the stored value would end up lower than one already
+        # published, which breaks the total_increasing contract and corrupts HA statistics.
+        self._images_annotated_lock = asyncio.Lock()
         self._camera_discovery_lock = asyncio.Lock()
 
         self._presence_tracker = PresenceTracker()
