@@ -23,7 +23,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.service_name = "vision2mqtt service"
         self.qos = 0
         self.ha_enabled = ha_enabled
-        self.seen_cameras: set[str] = set()
+        self.seen_cameras: dict[str, str] = {}
         self._camera_discovery_lock = asyncio.Lock()
         self.config = {"version": "v0.1.0-test"}
         self.mqtt_config = {"discovery_prefix": "homeassistant"}
@@ -261,6 +261,28 @@ class TestCameraDiscovery:
         assert payload["device"]["name"] == "Front Yard Vision"
         assert payload["device"]["via_device"] == "vision2mqtt"
         assert "cam1" in pub.seen_cameras
+
+    @pytest.mark.asyncio
+    async def test_republished_when_the_camera_is_renamed(self, sample_vision_config):
+        """Cameras get renamed upstream. Discovery used to be keyed on a set of ids, so the
+        display name was frozen at first detection and HA kept showing a months-old name."""
+        sample_vision_config["retain_presence"] = True
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        result = VisionResult(
+            objects=[DetectedObject(label="person", raw_label="person", confidence=0.87, bbox=[0.1, 0.2, 0.3, 0.4])],
+            processing_time_ms=5.0,
+        )
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(MotionEvent("cam1", "Side Yard", "ev1", "", "2026-02-14T15:30:45", "test"), result)
+            await pub.publish_vision_result(MotionEvent("cam1", "Grill", "ev2", "", "2026-02-14T15:31:45", "test"), result)
+
+        disc = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "homeassistant/device" in c.args[0] and "cam1" in c.args[0]]
+        assert len(disc) == 2, "rename must re-announce discovery"
+        assert json.loads(disc[0].args[1])["device"]["name"] == "Side Yard Vision"
+        assert json.loads(disc[1].args[1])["device"]["name"] == "Grill Vision"
+        assert pub.seen_cameras["cam1"] == "Grill"
 
     @pytest.mark.asyncio
     async def test_not_repeated_on_second_detection(self, sample_vision_config):
