@@ -39,6 +39,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.mqtt_helper.device_slug = MagicMock(side_effect=lambda d: f"vision2mqtt_{d}")
         self.mqtt_helper.stat_t = MagicMock(side_effect=lambda *args: "/".join(["vision2mqtt"] + [str(a) for a in args if a != "service"]))
         self.mqtt_helper.avty_t = MagicMock(return_value="vision2mqtt/availability")
+        self.mqtt_helper.cmd_t = MagicMock(side_effect=lambda d, *p: "/".join(["vision2mqtt", "service", *[str(x) for x in p], "command"]))
         self._presence_tracker = PresenceTracker()
         self._axcl_smi_path = None
 

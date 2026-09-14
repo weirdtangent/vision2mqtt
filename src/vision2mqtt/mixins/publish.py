@@ -56,6 +56,15 @@ class PublishMixin:
                     "entity_category": "diagnostic",
                     "icon": "mdi:eye",
                 },
+                "reset_discovery": {
+                    "p": "button",
+                    "name": "Reset discovery",
+                    "uniq_id": self.mqtt_helper.svc_unique_id("reset_discovery"),
+                    "obj_id": self.mqtt_helper.obj_id(self.service_name, "reset_discovery"),
+                    "cmd_t": self.mqtt_helper.cmd_t(device_id, "reset_discovery"),
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:refresh-circle",
+                },
                 **self.build_system_stats_components(),
             },
         }

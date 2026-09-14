@@ -2,7 +2,7 @@
 # Copyright (c) 2025 Jeff Culverhouse
 import asyncio
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,6 +15,9 @@ class FakeMqtt(MqttMixin):
         self.vision_config = vision_config
         self.logger = MagicMock()
         self.queue = asyncio.Queue(maxsize=max_queue)
+        self.mqtt_helper = MagicMock()
+        self.mqtt_helper.service_slug = "vision2mqtt"
+        self.handle_service_command = AsyncMock()
 
 
 def _make_msg(topic, payload):
@@ -40,17 +43,49 @@ VALID_PAYLOAD = {
 }
 
 
+COMMAND_TOPIC = "vision2mqtt/service/+/command"
+
+
 class TestMqttSubscriptionTopics:
-    def test_returns_configured_topics(self, sample_vision_config):
+    def test_returns_configured_topics_plus_the_command_topic(self, sample_vision_config):
         mqtt = FakeMqtt(sample_vision_config)
         topics = mqtt.mqtt_subscription_topics()
-        assert topics == ["+/vision/request"]
+        assert topics == ["+/vision/request", COMMAND_TOPIC]
 
     def test_returns_multiple_topics(self, sample_vision_config):
         sample_vision_config["subscribe_topics"] = ["amcrest2mqtt/vision/request", "blink2mqtt/vision/request"]
         mqtt = FakeMqtt(sample_vision_config)
         topics = mqtt.mqtt_subscription_topics()
-        assert len(topics) == 2
+        assert len(topics) == 3
+
+    def test_command_topic_is_added_even_with_no_configured_topics(self, sample_vision_config):
+        """The reset button must work regardless of subscribe_topics."""
+        sample_vision_config["subscribe_topics"] = []
+        mqtt = FakeMqtt(sample_vision_config)
+        assert mqtt.mqtt_subscription_topics() == [COMMAND_TOPIC]
+
+
+class TestServiceCommandRouting:
+    @pytest.mark.asyncio
+    async def test_service_command_is_routed_not_parsed_as_json(self, sample_vision_config):
+        """A button press is a plain string, not vision-request JSON. Routing it before the
+        json.loads() keeps every press from logging a decode warning."""
+        mqtt = FakeMqtt(sample_vision_config)
+        msg = _make_msg("vision2mqtt/service/reset_discovery/command", "PRESS")
+
+        await mqtt.mqtt_on_message(None, None, msg)
+
+        mqtt.handle_service_command.assert_awaited_once()
+        assert mqtt.handle_service_command.await_args.args[0] == "reset_discovery"
+        assert mqtt.queue.qsize() == 0
+        mqtt.logger.warning.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_vision_request_still_reaches_the_queue(self, sample_vision_config):
+        mqtt = FakeMqtt(sample_vision_config)
+        await mqtt.mqtt_on_message(None, None, _make_msg("amcrest2mqtt/vision/request", VALID_PAYLOAD))
+        assert mqtt.queue.qsize() == 1
+        mqtt.handle_service_command.assert_not_awaited()
 
 
 class TestMqttOnMessage:
