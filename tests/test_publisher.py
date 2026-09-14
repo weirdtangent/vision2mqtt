@@ -25,6 +25,7 @@ class FakePublisher(CompositesMixin, HelpersMixin, SystemStatsMixin, PublishMixi
         self.ha_enabled = ha_enabled
         self.seen_cameras: dict[str, str] = {}
         self.images_annotated: int = 0
+        self._images_annotated_lock = asyncio.Lock()
         self._camera_discovery_lock = asyncio.Lock()
         self.config = {"version": "v0.1.0-test"}
         self.mqtt_config = {"discovery_prefix": "homeassistant"}
@@ -257,6 +258,84 @@ class TestImagesAnnotatedCounter:
         assert pub.images_annotated == 3
         pubs = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "images_annotated" in c.args[0]]
         assert [c.args[1] for c in pubs] == ["1", "2", "3"]
+
+    @pytest.mark.asyncio
+    async def test_discovery_declares_the_counter_correctly(self, sample_vision_config):
+        """Topic, unit and state_class are the contract HA statistics depend on -- a regression
+        in any of them would otherwise pass silently."""
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_service_discovery()
+
+        disc = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "homeassistant/device" in c.args[0]]
+        cmp = json.loads(disc[0].args[1])["cmps"]["images_annotated"]
+        assert cmp["p"] == "sensor"
+        assert cmp["state_class"] == "total_increasing"
+        assert cmp["unit_of_measurement"] == "images"
+        assert cmp["entity_category"] == "diagnostic"
+        assert cmp["stat_t"].endswith("images_annotated")
+
+    @pytest.mark.asyncio
+    async def test_republished_on_connect_so_a_restart_is_visible(self, sample_vision_config):
+        """The topic is retained, so without this HA keeps serving the previous run's total
+        after a restart and a service processing nothing looks busy."""
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_service_state()
+
+        pubs = [c for c in pub.mqtt_helper.safe_publish.call_args_list if "images_annotated" in c.args[0]]
+        assert [c.args[1] for c in pubs] == ["0"]
+
+    @pytest.mark.asyncio
+    async def test_not_published_when_ha_disabled_but_still_counted(self, sample_vision_config):
+        pub = FakePublisher(sample_vision_config, ha_enabled=False)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _fake_to_thread
+            await pub.publish_vision_result(
+                MotionEvent("cam1", "Front Left", "ev1", "", "2026-02-14T15:30:45", "test"),
+                VisionResult(objects=[], processing_time_ms=5.0),
+            )
+
+        assert pub.images_annotated == 1, "counter must still advance"
+        assert not [c for c in pub.mqtt_helper.safe_publish.call_args_list if "images_annotated" in c.args[0]]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_results_publish_in_order(self, sample_vision_config):
+        """vision.concurrency > 1 means several workers reach this path at once. Retained +
+        total_increasing means an out-of-order publish leaves a LOWER stored value than one
+        already sent, which corrupts HA statistics.
+
+        HONEST SCOPE: this pins the ordering contract, it does NOT prove the lock is what
+        provides it. The real race is downstream -- asyncio.to_thread dispatches safe_publish to
+        a thread POOL, and two worker threads can reach the MQTT client in either order. That is
+        not reproducible here because to_thread is mocked. With the mock, arguments (including
+        str(self.images_annotated)) are evaluated before the await and coroutines resume FIFO, so
+        this passes with or without the lock. It still guards against a future refactor that
+        moves the counter read after the await, which WOULD break ordering deterministically."""
+        pub = FakePublisher(sample_vision_config, ha_enabled=True)
+        result = VisionResult(objects=[], processing_time_ms=5.0)
+
+        # _fake_to_thread is synchronous, so it never yields and the workers cannot interleave --
+        # this test would pass with or without the lock and prove nothing. Yield inside the
+        # publish so the race is actually possible.
+        async def _yielding_to_thread(fn, *a, **kw):
+            await asyncio.sleep(0)
+            return fn(*a, **kw)
+
+        with patch("vision2mqtt.mixins.publish.asyncio") as mock_asyncio:
+            mock_asyncio.to_thread = _yielding_to_thread
+            await asyncio.gather(
+                *[pub.publish_vision_result(MotionEvent("cam1", "Front Left", f"ev{n}", "", "2026-02-14T15:30:45", "test"), result) for n in range(25)]
+            )
+
+        vals = [int(c.args[1]) for c in pub.mqtt_helper.safe_publish.call_args_list if "images_annotated" in c.args[0]]
+        assert vals == sorted(vals), f"published out of order: {vals}"
+        assert vals == list(range(1, 26))
 
     @pytest.mark.asyncio
     async def test_counts_frames_with_no_objects(self, sample_vision_config):

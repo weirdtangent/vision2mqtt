@@ -182,6 +182,19 @@ Host metrics are always published when Home Assistant discovery is enabled:
 | `service/telemetry/load_avg_5m` | Load average (5 min) | — |
 | `service/telemetry/uptime` | System uptime | hours |
 
+Plus a throughput counter, published on every detector result and republished on connect:
+
+| Topic suffix | Metric | Unit |
+|-------------|--------|------|
+| `service/images_annotated` | Frames run through the detector since start | images |
+
+`images_annotated` counts frames **processed**, not detections found — a pipeline running 500
+empty frames a day is healthy, one running zero is not, and only this number tells them apart.
+It is published as `state_class: total_increasing`, so Home Assistant derives 24h/7d throughput
+from long-term statistics and treats the reset to 0 on restart as a new cycle rather than a spike.
+The topic is retained, so it is republished on every connect to make a restart visible
+immediately rather than leaving the previous run's total on display.
+
 NPU metrics are published when `axcl-smi` is available in the container (mount `/usr/bin/axcl`):
 
 | Topic suffix | Metric | Unit |

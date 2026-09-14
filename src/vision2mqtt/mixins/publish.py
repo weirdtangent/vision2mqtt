@@ -97,6 +97,16 @@ class PublishMixin:
             self.mqtt_helper.stat_t("service", "service", "server"),
             "online",
         )
+        # Republish the counter on every connect. The topic is retained (MqttHelper is built with
+        # default_retain=True), so after a restart HA would otherwise keep serving the PREVIOUS
+        # run's total until the next detection -- making a service that has processed nothing
+        # look busy. Publishing the current value here makes the reset visible immediately, and
+        # total_increasing treats the drop to 0 as a new cycle rather than a spike.
+        await asyncio.to_thread(
+            self.mqtt_helper.safe_publish,
+            self.mqtt_helper.stat_t("service", "service", "images_annotated"),
+            str(self.images_annotated),
+        )
 
     async def publish_camera_discovery(self: Vision2Mqtt, camera_id: str, camera_name: str) -> None:
         if not self.ha_enabled:
@@ -360,12 +370,16 @@ class PublishMixin:
 
         # Count every frame the detector ran, not just ones that found something -- a pipeline
         # processing 500 empty frames a day is healthy, and one processing zero is not.
-        self.images_annotated += 1
-        await asyncio.to_thread(
-            self.mqtt_helper.safe_publish,
-            self.mqtt_helper.stat_t("service", "service", "images_annotated"),
-            str(self.images_annotated),
-        )
+        # The counter itself always advances; only the publish is gated on HA, matching every
+        # other state publisher here.
+        async with self._images_annotated_lock:
+            self.images_annotated += 1
+            if self.ha_enabled:
+                await asyncio.to_thread(
+                    self.mqtt_helper.safe_publish,
+                    self.mqtt_helper.stat_t("service", "service", "images_annotated"),
+                    str(self.images_annotated),
+                )
 
         self.logger.info(f"published results for '{event.camera_name}' ({event.event_id}): {len(result.objects)} objects, {result.processing_time_ms}ms")
 
