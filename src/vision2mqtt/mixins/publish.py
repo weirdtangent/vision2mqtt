@@ -58,7 +58,7 @@ class PublishMixin:
                 },
                 "images_annotated": {
                     "p": "sensor",
-                    "name": "Images annotated",
+                    "name": "Images annotated today",
                     "uniq_id": self.mqtt_helper.svc_unique_id("images_annotated"),
                     "obj_id": self.mqtt_helper.obj_id(self.service_name, "images_annotated"),
                     "stat_t": self.mqtt_helper.stat_t(device_id, "service", "images_annotated"),
@@ -373,6 +373,12 @@ class PublishMixin:
         # The counter itself always advances; only the publish is gated on HA, matching every
         # other state publisher here.
         async with self._images_annotated_lock:
+            # Roll over at LOCAL midnight, like amcrest2mqtt's api_calls. Compared by date on a
+            # timezone-aware local timestamp, so the boundary is the user's midnight and not UTC's.
+            now = datetime.now(UTC).astimezone()
+            if self.images_annotated_date.date() != now.date():
+                self.images_annotated = 0
+            self.images_annotated_date = now
             self.images_annotated += 1
             if self.ha_enabled:
                 await asyncio.to_thread(
