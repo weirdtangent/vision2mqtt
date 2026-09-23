@@ -61,34 +61,19 @@ jobs:
 
       - name: Pip-audit
         if: matrix.python-version == '3.12'
-        # Ignored advisories — review each time the lockfile changes substantially (e.g. torch bump):
-        #   pygments/requests/pip: no fix available upstream yet
-        #   torch PYSEC-2025-189..197, 210, PYSEC-2026-139: OSV false positives;
-        #     all 11 advisories list torch 2.9.1 as their highest affected version,
-        #     but malformed OSV range events (introduced=0 with empty fixed event)
-        #     cause pip-audit to flag torch 2.10.0. Remove if torch is downgraded
-        #     below 2.10.0 or if OSV publishes corrected range data.
-        #   CVE-2025-3000 (GHSA-rrmf-rvhw-rf47): torch.jit.script memory
-        #     corruption, no upstream fix yet (vuln <=2.12.0, patched=null).
-        #     Re-evaluate when PyTorch publishes a patched release.
-        run: |
-          uv run pip-audit \
-            --ignore-vuln CVE-2026-4539 \
-            --ignore-vuln CVE-2026-25645 \
-            --ignore-vuln CVE-2026-3219 \
-            --ignore-vuln CVE-2025-3000 \
-            --ignore-vuln PYSEC-2026-196 \
-            --ignore-vuln PYSEC-2025-189 \
-            --ignore-vuln PYSEC-2025-190 \
-            --ignore-vuln PYSEC-2025-191 \
-            --ignore-vuln PYSEC-2025-192 \
-            --ignore-vuln PYSEC-2025-193 \
-            --ignore-vuln PYSEC-2025-194 \
-            --ignore-vuln PYSEC-2025-195 \
-            --ignore-vuln PYSEC-2025-196 \
-            --ignore-vuln PYSEC-2025-197 \
-            --ignore-vuln PYSEC-2025-210 \
-            --ignore-vuln PYSEC-2026-139
+        # No suppressions. The 14 --ignore-vuln entries that used to live here were
+        # all obsolete as of the 2026-09-23 lock upgrade and were removed rather
+        # than carried forward:
+        #   * the 12 torch advisories (PYSEC-2025-189..197, 210, PYSEC-2026-139 and
+        #     CVE-2025-3000) no longer match now that torch is 2.14.0 — every one of
+        #     them topped out at an affected version below that.
+        #   * the pygments / requests / pip advisories (CVE-2026-4539, CVE-2026-25645,
+        #     CVE-2026-3219, PYSEC-2026-196) have since been fixed upstream and the
+        #     locked versions are past the fix.
+        # Keep it that way: if this step goes red, fix or re-pin the dependency.
+        # Only add an --ignore-vuln for an advisory with genuinely no upstream fix,
+        # and say here which package it is and when to drop it again.
+        run: uv run pip-audit
 
   test:
     name: Test
