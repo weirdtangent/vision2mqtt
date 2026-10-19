@@ -12,7 +12,7 @@ dependencies = [
     "paho-mqtt>=2.1.0",
     "pyyaml>=6.0.3",
     "pillow>=12.3.0",
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
     "psutil>=7.2.2",
     "json-logging-graystorm",
     "mqtt-helper-graystorm",
@@ -23,11 +23,11 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.172",
+    "ultralytics>=8.4.175",
 ]
 dev = [
     # linting/formatting
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
 
     # testing/coverage
     "pytest>=9.1.1",
@@ -148,7 +148,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
     "types-pyyaml>=6.0.12.20260906",
     "pip-audit>=2.10.1",
 ]
