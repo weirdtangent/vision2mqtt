@@ -24,7 +24,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.12', '3.13', '3.14']
+        python-version: ['3.12', '3.13', '3.14', '3.15']
+        include:
+          # torch (pulled in by the ultralytics extra) has no cp315 wheels yet, so
+          # 3.15 installs without it. The prod image doesn't ship ultralytics either.
+          # Drop this override once torch publishes cp315 wheels.
+          - python-version: '3.15'
+            sync-args: '--extra dev --dev'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
@@ -45,7 +51,7 @@ jobs:
         run: uv lock --check
 
       - name: Install project (dev)
-        run: uv sync --all-extras --dev
+        run: uv sync ${{ matrix.sync-args || '--all-extras --dev' }}
 
       - name: Ruff
         run: uv run ruff check .
@@ -82,7 +88,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.12', '3.13', '3.14']
+        python-version: ['3.12', '3.13', '3.14', '3.15']
+        include:
+          # torch (pulled in by the ultralytics extra) has no cp315 wheels yet, so
+          # 3.15 installs without it. The prod image doesn't ship ultralytics either.
+          # Drop this override once torch publishes cp315 wheels.
+          - python-version: '3.15'
+            sync-args: '--extra dev --dev'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
@@ -97,7 +109,7 @@ jobs:
           version: "latest"
 
       - name: Install project (dev)
-        run: uv sync --all-extras --dev
+        run: uv sync ${{ matrix.sync-args || '--all-extras --dev' }}
 
       - name: Run tests
         run: uv run pytest tests/ -v
