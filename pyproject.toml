@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=84.0.0", "setuptools-scm>=10.3.4", "wheel"]
+requires = ["setuptools>=84.1.0", "setuptools-scm>=10.3.4", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -135,8 +135,8 @@ exclude_lines = [
 
 [tool.uv]
 # setuptools is pulled transitively by torch (linux-only) at 81.0.0, which has
-# PYSEC-2026-3447. Nothing requests a newer floor, so pin it above the fix here.
-constraint-dependencies = ["setuptools>=84.0.0"]
+# PYSEC-2026-3447 (and GHSA-xmj3-9gf7-h52w, fixed in 84.1.0). Nothing requests a newer floor, so pin it above the fix here.
+constraint-dependencies = ["setuptools>=84.1.0"]
 
 [tool.uv.sources]
 json-logging-graystorm = { git = "https://github.com/weirdtangent/json-logging.git", rev = "5e245601ad2da7676a52281345e4040bb0281ffb" }
