@@ -23,15 +23,15 @@ vision2mqtt = "vision2mqtt.app:main"
 
 [project.optional-dependencies]
 ultralytics = [
-    "ultralytics>=8.4.188",
+    "ultralytics>=8.4.197",
 ]
 dev = [
     # linting/formatting
-    "ruff>=0.17.2",
+    "ruff>=0.17.3",
 
     # testing/coverage
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
     "pytest-cov>=7.1.0",
 ]
 
@@ -144,12 +144,12 @@ mqtt-helper-graystorm = { git = "https://github.com/weirdtangent/mqtt-helper.git
 
 [dependency-groups]
 dev = [
-    "mypy>=2.4.0",
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.17.2",
-    "types-pyyaml>=6.0.12.20260906",
+    "ruff>=0.17.3",
+    "types-pyyaml>=6.0.12.20261030",
     "pip-audit>=2.10.1",
 ]
 
